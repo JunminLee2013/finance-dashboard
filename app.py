@@ -1,0 +1,562 @@
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from supabase import create_client, Client
+from datetime import datetime, date
+import math
+
+# ── 페이지 설정 ──────────────────────────────────────────────────
+st.set_page_config(
+    page_title="재무 대시보드",
+    page_icon="💰",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── 스타일 ────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
+html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
+.stApp { background: #0d1117; color: #e6edf3; }
+[data-testid="stSidebar"] { background: #161b22 !important; border-right: 1px solid #30363d; }
+
+.metric-card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 18px 20px; position: relative; overflow: hidden; margin-bottom: 4px;
+}
+.metric-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg,#238636,#2ea043);
+}
+.metric-card.red::before  { background: linear-gradient(90deg,#da3633,#f85149); }
+.metric-card.blue::before { background: linear-gradient(90deg,#1f6feb,#388bfd); }
+.metric-card.gold::before { background: linear-gradient(90deg,#9e6a03,#d29922); }
+.metric-card.gray::before { background: linear-gradient(90deg,#30363d,#6e7681); }
+
+.metric-label { font-size:11px; color:#8b949e; letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px; }
+.metric-value { font-family:'Space Mono',monospace; font-size:22px; font-weight:700; color:#e6edf3; line-height:1; }
+.metric-sub   { font-size:11px; color:#8b949e; margin-top:5px; }
+.metric-delta { font-size:12px; margin-top:4px; font-family:'Space Mono',monospace; }
+.dp { color:#2ea043; } .dn { color:#f85149; }
+
+.sec { font-size:12px; font-weight:500; color:#8b949e; text-transform:uppercase;
+       letter-spacing:.1em; padding:14px 0 8px; border-bottom:1px solid #21262d; margin-bottom:14px; }
+
+div[data-testid="stForm"] { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:20px; }
+.stButton>button { background:#238636!important; color:white!important; border:none!important;
+                   border-radius:6px!important; font-weight:500!important; width:100%; }
+.stButton>button:hover { background:#2ea043!important; }
+.stTabs [data-baseweb="tab-list"] { background:transparent; border-bottom:1px solid #30363d; }
+.stTabs [data-baseweb="tab"] { color:#8b949e; background:transparent; border:none; padding:8px 18px; font-size:14px; }
+.stTabs [aria-selected="true"] { color:#e6edf3!important; border-bottom:2px solid #2ea043!important; }
+.stNumberInput input, .stTextInput input, .stDateInput input {
+    background:#0d1117!important; border:1px solid #30363d!important; color:#e6edf3!important; border-radius:6px!important;
+}
+h1,h2,h3 { color:#e6edf3!important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Supabase 연결 ─────────────────────────────────────────────────
+@st.cache_resource
+def get_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+# ── 데이터 로드 ───────────────────────────────────────────────────
+@st.cache_data(ttl=120)
+def load_data() -> pd.DataFrame:
+    sb = get_supabase()
+    res = sb.table("finance_monthly").select("*").order("date", desc=False).execute()
+    if not res.data:
+        return pd.DataFrame()
+    df = pd.DataFrame(res.data)
+    df["date"] = pd.to_datetime(df["date"])
+    num_cols = df.columns.difference(["id", "created_at", "date"])
+    df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
+    return df
+
+def save_row(record: dict):
+    sb = get_supabase()
+    sb.table("finance_monthly").upsert(record, on_conflict="date").execute()
+    st.cache_data.clear()
+
+def delete_row(row_id: int):
+    sb = get_supabase()
+    sb.table("finance_monthly").delete().eq("id", row_id).execute()
+    st.cache_data.clear()
+
+# ── 파생 지표 계산 ────────────────────────────────────────────────
+def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
+    g = lambda k: float(d.get(k) or 0)
+
+    exr  = g("exchange_rate") or 1300
+    cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription")
+    stk  = g("jm_stock_value") + g("em_stock_value")
+    coin = g("coin_cash")
+    fin  = cash + stk + coin
+    real = g("real_estate")
+    total_a = fin + real
+
+    fin_debt  = g("jm_fin_debt") + g("donggum_invest") + g("em_fin_debt") + g("card_debt")
+    real_debt = g("real_debt")
+    total_d   = fin_debt + real_debt
+    net       = total_a - total_d
+
+    pension = (g("teachers_mutual") + g("jm_pension_total") + g("jm_pension_profit") +
+               g("em_pension_total") + g("em_pension_profit") +
+               g("jm_irp_total") + g("jm_irp_profit") +
+               g("em_irp_total") + g("em_irp_profit"))
+
+    r = {
+        "cash_assets":       cash,
+        "stock_assets":      stk,
+        "coin_assets":       coin,
+        "financial_assets":  fin,
+        "real_assets":       real,
+        "liquid_assets":     fin,
+        "illiquid_assets":   real,
+        "total_assets":      total_a,
+        "total_assets_usd":  round(total_a / exr, 0),
+        "fin_debt":          fin_debt,
+        "total_debt":        total_d,
+        "total_debt_usd":    round(total_d / exr, 0),
+        "net_assets":        net,
+        "net_assets_usd":    round(net / exr, 0),
+        "liquid_net_assets": fin - fin_debt,
+        "fin_net_assets":    fin - fin_debt,
+        "total_pension":     pension,
+        "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
+        "liquid_ratio":      round(fin / total_a * 100, 1) if total_a else 0,
+        "illiquid_ratio":    round(real / total_a * 100, 1) if total_a else 0,
+        "fin_asset_ratio":   round(fin / total_a * 100, 1) if total_a else 0,
+        "real_asset_ratio":  round(real / total_a * 100, 1) if total_a else 0,
+        "cash_ratio":        round(cash / fin * 100, 1) if fin else 0,
+        "stock_ratio":       round(stk / fin * 100, 1) if fin else 0,
+        "coin_ratio":        round(coin / fin * 100, 1) if fin else 0,
+    }
+
+    # YTD 계산 (기존 데이터가 있을 때)
+    if df_all is not None and not df_all.empty:
+        entry_date = pd.to_datetime(d.get("date"))
+        year_start = df_all[df_all["date"].dt.year == entry_date.year]
+        if not year_start.empty:
+            first = year_start.iloc[0]
+            net_start = first["net_assets"] if not pd.isna(first.get("net_assets")) else net
+            r["net_assets_ytd_krw"] = net - net_start
+            r["net_assets_ytd_pct"] = round((net - net_start) / net_start * 100, 2) if net_start else 0
+            r["net_assets_ytd_usd"] = round((net - net_start) / exr, 0)
+
+    return r
+
+# ── 포맷 헬퍼 ─────────────────────────────────────────────────────
+def fmt_krw(v):
+    if v is None or (isinstance(v, float) and math.isnan(v)): return "—"
+    if abs(v) >= 1e8: return f"₩{v/1e8:.1f}억"
+    if abs(v) >= 1e4: return f"₩{v/1e4:.0f}만"
+    return f"₩{v:,.0f}"
+
+def fmt_usd(v):
+    if v is None or (isinstance(v, float) and math.isnan(v)): return "—"
+    if abs(v) >= 1e6: return f"${v/1e6:.2f}M"
+    return f"${v:,.0f}"
+
+def fmt_pct(v):
+    if v is None or (isinstance(v, float) and math.isnan(v)): return "—"
+    return f"{v:+.1f}%" if v != 0 else "0.0%"
+
+def delta_span(v, is_pct=False):
+    if v is None or (isinstance(v, float) and math.isnan(v)): return ""
+    fmt = f"{v:+.1f}%" if is_pct else fmt_krw(v)
+    cls = "dp" if v >= 0 else "dn"
+    arrow = "▲" if v >= 0 else "▼"
+    return f'<span class="{cls}">{arrow} {fmt}</span>'
+
+def card(label, val, sub="", delta=None, delta_pct=None, color="green"):
+    d = ""
+    if delta is not None: d += delta_span(delta)
+    if delta_pct is not None: d += f" &nbsp;{delta_span(delta_pct, True)}"
+    cc = {"green":"metric-card","red":"metric-card red","blue":"metric-card blue",
+          "gold":"metric-card gold","gray":"metric-card gray"}.get(color,"metric-card")
+    st.markdown(f"""
+    <div class="{cc}">
+      <div class="metric-label">{label}</div>
+      <div class="metric-value">{val}</div>
+      {'<div class="metric-sub">'+sub+'</div>' if sub else ''}
+      {'<div class="metric-delta">'+d+'</div>' if d else ''}
+    </div>""", unsafe_allow_html=True)
+
+LAYOUT = dict(
+    paper_bgcolor="#0d1117", plot_bgcolor="#0d1117",
+    font=dict(color="#8b949e", family="Noto Sans KR"),
+    xaxis=dict(gridcolor="#21262d", linecolor="#30363d"),
+    yaxis=dict(gridcolor="#21262d", linecolor="#30363d"),
+    legend=dict(bgcolor="rgba(0,0,0,0)"),
+    margin=dict(l=0, r=0, t=40, b=0), hovermode="x unified",
+)
+
+# ── 사이드바 ──────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## 💰 재무 대시보드")
+    st.markdown("---")
+    page = st.radio("메뉴", ["📊 대시보드", "📝 데이터 입력", "📋 데이터 관리", "📈 상세 분석"],
+                    label_visibility="collapsed")
+    st.markdown("---")
+    if st.button("🔄 새로고침"):
+        st.cache_data.clear(); st.rerun()
+    st.markdown(f"<div style='color:#8b949e;font-size:11px'>{datetime.now().strftime('%Y-%m-%d %H:%M')} 기준</div>",
+                unsafe_allow_html=True)
+
+df = load_data()
+
+# ══════════════════════════════════════════════════════════════════
+# 📊 대시보드
+# ══════════════════════════════════════════════════════════════════
+if page == "📊 대시보드":
+    st.markdown("# 재무 현황")
+
+    if df.empty:
+        st.info("데이터가 없습니다. '데이터 입력' 탭에서 추가해주세요.")
+        st.stop()
+
+    latest = df.iloc[-1]
+    prev   = df.iloc[-2] if len(df) > 1 else None
+
+    st.markdown(f"<div style='color:#8b949e;font-size:13px;margin-bottom:20px'>"
+                f"📅 최신: <b style='color:#e6edf3'>{latest['date'].strftime('%Y년 %m월')}</b>"
+                f" &nbsp;|&nbsp; 총 {len(df)}개월 기록</div>", unsafe_allow_html=True)
+
+    # 핵심 지표
+    st.markdown('<div class="sec">핵심 지표</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        d = latest["net_assets"] - prev["net_assets"] if prev is not None else None
+        card("순자산", fmt_krw(latest["net_assets"]),
+             sub=f"USD {fmt_usd(latest['net_assets_usd'])}", delta=d, color="green")
+    with c2:
+        d = latest["total_assets"] - prev["total_assets"] if prev is not None else None
+        card("총 자산", fmt_krw(latest["total_assets"]),
+             sub=f"USD {fmt_usd(latest['total_assets_usd'])}", delta=d, color="blue")
+    with c3:
+        d = latest["total_debt"] - prev["total_debt"] if prev is not None else None
+        card("총 부채", fmt_krw(latest["total_debt"]),
+             sub=f"부채비율 {fmt_pct(latest['debt_ratio'])}", delta=d, color="red")
+    with c4:
+        ytd = latest.get("net_assets_ytd_pct")
+        card("순자산 YTD", fmt_pct(ytd) if ytd else "—",
+             sub=fmt_krw(latest.get("net_assets_ytd_krw")), color="gold")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 자산 구성
+    st.markdown('<div class="sec">자산 구성</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    items = [
+        ("금융자산",   "financial_assets", "fin_asset_ratio",  "blue"),
+        ("실물자산",   "real_assets",      "real_asset_ratio", "gray"),
+        ("현금성 자산", "cash_assets",      "cash_ratio",       "green"),
+        ("주식",      "stock_assets",     "stock_ratio",      "blue"),
+        ("코인",      "coin_assets",      "coin_ratio",       "gold"),
+    ]
+    for col, (lbl, vk, rk, clr) in zip([c1,c2,c3,c4,c5], items):
+        with col:
+            card(lbl, fmt_krw(latest.get(vk)),
+                 sub=f"비중 {fmt_pct(latest.get(rk))}", color=clr)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 차트
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 순자산 추이", "🏦 자산 구성", "💳 부채 현황", "🎯 연금"])
+
+    with tab1:
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets"], name="순자산",
+            line=dict(color="#2ea043",width=2.5), fill="tozeroy", fillcolor="rgba(46,160,67,0.08)"), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets"], name="총자산",
+            line=dict(color="#388bfd",width=1.5,dash="dot")), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채",
+            line=dict(color="#f85149",width=1.5,dash="dot")), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["exchange_rate"], name="환율",
+            line=dict(color="#d29922",width=1,dash="dash")), secondary_y=True)
+        fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
+                          yaxis_title="원", yaxis2_title="환율(₩/$)")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = go.Figure(go.Pie(
+                labels=["금융자산","실물자산"],
+                values=[latest.get("financial_assets",0), latest.get("real_assets",0)],
+                hole=0.55, marker_colors=["#388bfd","#d29922"]))
+            fig.update_layout(**LAYOUT, title="금융 vs 실물")
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            c_ = latest.get("cash_assets",0) or 0
+            s_ = latest.get("stock_assets",0) or 0
+            k_ = latest.get("coin_assets",0) or 0
+            fig = go.Figure(go.Pie(
+                labels=["현금성","주식","코인"],
+                values=[c_, s_, k_], hole=0.55,
+                marker_colors=["#2ea043","#388bfd","#d29922"]))
+            fig.update_layout(**LAYOUT, title="금융자산 세부")
+            st.plotly_chart(fig, use_container_width=True)
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=df["date"], y=df["cash_assets"],  name="현금성", marker_color="#2ea043"))
+        fig.add_trace(go.Bar(x=df["date"], y=df["stock_assets"], name="주식",   marker_color="#388bfd"))
+        fig.add_trace(go.Bar(x=df["date"], y=df["coin_assets"],  name="코인",   marker_color="#d29922"))
+        fig.add_trace(go.Bar(x=df["date"], y=df["real_assets"],  name="실물",   marker_color="#6e7681"))
+        fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=df["date"], y=df["fin_debt"],   name="금융부채", marker_color="#f85149"))
+            fig.add_trace(go.Bar(x=df["date"], y=df["real_debt"],  name="실물부채", marker_color="#da3633"))
+            fig.update_layout(**LAYOUT, barmode="stack", title="부채 구성 추이")
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            fig = go.Figure(go.Scatter(x=df["date"], y=df["debt_ratio"], name="부채비율",
+                line=dict(color="#f85149",width=2), fill="tozeroy", fillcolor="rgba(248,81,73,0.08)"))
+            fig.update_layout(**LAYOUT, title="부채 비율 추이 (%)", yaxis_title="%")
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab4:
+        st.markdown('<div class="sec">최신 연금 현황</div>', unsafe_allow_html=True)
+        c1, c2, c3, c4, c5 = st.columns(5)
+        pensions = [
+            ("교직원공제회", "teachers_mutual"),
+            ("준민연금저축", "jm_pension_total"),
+            ("은미연금저축", "em_pension_total"),
+            ("준민IRP",    "jm_irp_total"),
+            ("은미IRP",    "em_irp_total"),
+        ]
+        for col, (lbl, key) in zip([c1,c2,c3,c4,c5], pensions):
+            with col: card(lbl, fmt_krw(latest.get(key)), color="gold")
+
+        fig = go.Figure()
+        clrs = ["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"]
+        for i, (lbl, key) in enumerate(pensions):
+            if key in df.columns:
+                fig.add_trace(go.Scatter(x=df["date"], y=df[key], name=lbl,
+                    line=dict(color=clrs[i], width=2)))
+        fig.update_layout(**LAYOUT, title="연금 자산 추이")
+        st.plotly_chart(fig, use_container_width=True)
+
+# ══════════════════════════════════════════════════════════════════
+# 📝 데이터 입력
+# ══════════════════════════════════════════════════════════════════
+elif page == "📝 데이터 입력":
+    st.markdown("# 월별 데이터 입력")
+    st.markdown("<div style='color:#8b949e;font-size:13px;margin-bottom:24px'>"
+                "매월 말 기준 데이터를 입력하세요. 파생 지표는 자동 계산됩니다.</div>",
+                unsafe_allow_html=True)
+
+    # 마지막 행으로 기본값
+    last = df.iloc[-1].to_dict() if not df.empty else {}
+    def dv(k, fallback=0.0):
+        v = last.get(k)
+        if v is None or (isinstance(v, float) and math.isnan(v)): return float(fallback)
+        return float(v)
+
+    GROUPS = [
+        ("📅 기본 정보", [
+            ("date",          "date",   None),
+            ("exchange_rate", "num",    dv("exchange_rate", 1300)),
+        ]),
+        ("💵 현금성 자산", [
+            ("jm_cash",        "num", dv("jm_cash")),
+            ("jm_subscription","num", dv("jm_subscription")),
+            ("em_cash",        "num", dv("em_cash")),
+            ("em_subscription","num", dv("em_subscription")),
+        ]),
+        ("📈 주식", [
+            ("jm_stock_book",  "num", dv("jm_stock_book")),
+            ("jm_stock_value", "num", dv("jm_stock_value")),
+            ("em_stock_book",  "num", dv("em_stock_book")),
+            ("em_stock_value", "num", dv("em_stock_value")),
+        ]),
+        ("🪙 코인", [
+            ("coin_total_buy", "num", dv("coin_total_buy")),
+            ("coin_cash",      "num", dv("coin_cash")),
+        ]),
+        ("🏠 실물자산", [
+            ("real_estate",    "num", dv("real_estate")),
+        ]),
+        ("💳 금융부채", [
+            ("jm_fin_debt",    "num", dv("jm_fin_debt")),
+            ("donggum_invest", "num", dv("donggum_invest")),
+            ("em_fin_debt",    "num", dv("em_fin_debt")),
+            ("card_debt",      "num", dv("card_debt")),
+        ]),
+        ("🏦 실물부채 (주담대)", [
+            ("real_debt",      "num", dv("real_debt")),
+        ]),
+        ("🎯 연금", [
+            ("teachers_mutual",           "num", dv("teachers_mutual")),
+            ("teachers_mutual_principal", "num", dv("teachers_mutual_principal")),
+            ("teachers_mutual_bonus",     "num", dv("teachers_mutual_bonus")),
+            ("jm_pension_total",          "num", dv("jm_pension_total")),
+            ("jm_pension_profit",         "num", dv("jm_pension_profit")),
+            ("em_pension_total",          "num", dv("em_pension_total")),
+            ("em_pension_profit",         "num", dv("em_pension_profit")),
+            ("jm_irp_total",              "num", dv("jm_irp_total")),
+            ("jm_irp_profit",             "num", dv("jm_irp_profit")),
+            ("em_irp_total",              "num", dv("em_irp_total")),
+            ("em_irp_profit",             "num", dv("em_irp_profit")),
+        ]),
+    ]
+
+    LABELS = {
+        "date":"날짜","exchange_rate":"환율 (₩/$)",
+        "jm_cash":"준민 현금","jm_subscription":"준민 주택청약",
+        "em_cash":"은미 현금","em_subscription":"은미 주택청약",
+        "jm_stock_book":"준민 주식 (납입)","jm_stock_value":"준민 주식 (평가)",
+        "em_stock_book":"은미 주식 (납입)","em_stock_value":"은미 주식 (평가)",
+        "coin_total_buy":"코인 총매수","coin_cash":"코인 현재가치",
+        "real_estate":"부동산",
+        "jm_fin_debt":"준민 금융부채","donggum_invest":"동금씨 투자금",
+        "em_fin_debt":"은미 금융부채","card_debt":"카드값",
+        "real_debt":"실물부채 (주담대)",
+        "teachers_mutual":"교직원공제회","teachers_mutual_principal":"└ 원금",
+        "teachers_mutual_bonus":"└ 부가금",
+        "jm_pension_total":"준민연금저축 납입","jm_pension_profit":"└ 수익금",
+        "em_pension_total":"은미연금저축 납입","em_pension_profit":"└ 수익금",
+        "jm_irp_total":"준민IRP 납입","jm_irp_profit":"└ 수익금",
+        "em_irp_total":"은미IRP 납입","em_irp_profit":"└ 수익금",
+    }
+
+    with st.form("entry_form"):
+        inp = {}
+        for group_name, fields in GROUPS:
+            st.markdown(f"### {group_name}")
+            ncols = min(len(fields), 4)
+            cols = st.columns(ncols)
+            for i, (key, ftype, default) in enumerate(fields):
+                with cols[i % ncols]:
+                    lbl = LABELS.get(key, key)
+                    if ftype == "date":
+                        v = st.date_input(lbl, value=date.today().replace(day=1))
+                        inp["date"] = v.strftime("%Y-%m-%d")
+                    else:
+                        inp[key] = st.number_input(lbl, value=default, step=10000.0, format="%g")
+
+        # 미리보기
+        st.markdown("---")
+        st.markdown("#### 🔢 자동 계산 미리보기")
+        derived = calc_derived(inp, df)
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("총 자산",   fmt_krw(derived["total_assets"]),  f"USD {fmt_usd(derived['total_assets_usd'])}")
+        p2.metric("총 부채",   fmt_krw(derived["total_debt"]))
+        p3.metric("순자산",    fmt_krw(derived["net_assets"]),    f"USD {fmt_usd(derived['net_assets_usd'])}")
+        p4.metric("부채 비율", fmt_pct(derived["debt_ratio"]))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        submitted = st.form_submit_button("✅ 저장하기", use_container_width=True)
+        if submitted:
+            full = {**inp, **derived}
+            try:
+                save_row(full)
+                st.success(f"✅ {inp.get('date')} 데이터가 저장됐습니다!")
+                st.balloons()
+            except Exception as e:
+                st.error(f"저장 실패: {e}")
+
+# ══════════════════════════════════════════════════════════════════
+# 📋 데이터 관리
+# ══════════════════════════════════════════════════════════════════
+elif page == "📋 데이터 관리":
+    st.markdown("# 데이터 관리")
+    if df.empty:
+        st.info("저장된 데이터가 없습니다."); st.stop()
+
+    disp = df[["id","date","total_assets","total_debt","net_assets",
+               "financial_assets","real_assets","cash_assets","stock_assets",
+               "coin_assets","debt_ratio","exchange_rate"]].copy()
+    disp["date"] = disp["date"].dt.strftime("%Y-%m")
+    for c in disp.columns:
+        if c in ("id","date"): continue
+        if "ratio" in c or "pct" in c:
+            disp[c] = disp[c].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+        elif c == "exchange_rate":
+            disp[c] = disp[c].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "—")
+        else:
+            disp[c] = disp[c].apply(fmt_krw)
+
+    disp.columns = ["ID","날짜","자산","부채","순자산","금융자산","실물자산","현금성","주식","코인","부채비율","환율"]
+    st.dataframe(disp.iloc[::-1], use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        csv = df.to_csv(index=False, encoding="utf-8-sig")
+        st.download_button("📥 CSV 다운로드", csv,
+            f"재무데이터_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+    with c2:
+        del_id = st.number_input("삭제할 ID", min_value=1, step=1, value=1)
+        if st.button("🗑️ 삭제"):
+            delete_row(int(del_id))
+            st.success(f"ID {del_id} 삭제 완료"); st.rerun()
+
+# ══════════════════════════════════════════════════════════════════
+# 📈 상세 분석
+# ══════════════════════════════════════════════════════════════════
+elif page == "📈 상세 분석":
+    st.markdown("# 상세 분석")
+    if df.empty or len(df) < 2:
+        st.info("최소 2개월 이상의 데이터가 필요합니다."); st.stop()
+
+    latest = df.iloc[-1]
+    year = latest["date"].year
+    ydf  = df[df["date"].dt.year == year]
+
+    if len(ydf) > 1:
+        st.markdown('<div class="sec">올해 YTD</div>', unsafe_allow_html=True)
+        y0 = ydf.iloc[0]
+        c1,c2,c3,c4 = st.columns(4)
+        def yd(k): return latest.get(k,0) - y0.get(k,0)
+        with c1: card("순자산 증감", fmt_krw(yd("net_assets")),
+                      sub=fmt_pct(yd("net_assets")/y0.get("net_assets",1)*100 if y0.get("net_assets") else 0),
+                      delta=yd("net_assets"), color="green")
+        with c2: card("금융자산 증감", fmt_krw(yd("financial_assets")), delta=yd("financial_assets"), color="blue")
+        with c3: card("부채 증감", fmt_krw(yd("total_debt")), delta=yd("total_debt"), color="red")
+        with c4: card("YTD 수익률", fmt_pct(latest.get("net_assets_ytd_pct")), color="gold")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 월간 증감
+    st.markdown('<div class="sec">월간 순자산 증감</div>', unsafe_allow_html=True)
+    dd = df.copy(); dd["delta"] = dd["net_assets"].diff(); dd = dd.dropna(subset=["delta"])
+    fig = go.Figure(go.Bar(x=dd["date"], y=dd["delta"],
+        marker_color=["#2ea043" if v>=0 else "#f85149" for v in dd["delta"]]))
+    fig.update_layout(**LAYOUT, title="월간 순자산 증감", yaxis_title="원")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 자산 비중
+    st.markdown('<div class="sec">자산 비중 변화</div>', unsafe_allow_html=True)
+    fig = go.Figure()
+    ratio_items = [("cash_ratio","현금성","#2ea043"),("stock_ratio","주식","#388bfd"),
+                   ("coin_ratio","코인","#d29922"),("real_asset_ratio","실물","#6e7681")]
+    for k,n,c in ratio_items:
+        if k in df.columns:
+            fig.add_trace(go.Scatter(x=df["date"],y=df[k],name=n,
+                line=dict(color=c,width=2),stackgroup="one",groupnorm="percent"))
+    fig.update_layout(**LAYOUT, title="자산 비중 추이 (%)", yaxis_title="%")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 연금
+    st.markdown('<div class="sec">연금 자산 추이</div>', unsafe_allow_html=True)
+    fig = go.Figure()
+    for i,(lbl,k) in enumerate([("교직원공제회","teachers_mutual"),("준민연금저축","jm_pension_total"),
+                                  ("은미연금저축","em_pension_total"),("준민IRP","jm_irp_total"),("은미IRP","em_irp_total")]):
+        if k in df.columns:
+            fig.add_trace(go.Scatter(x=df["date"],y=df[k],name=lbl,
+                line=dict(color=["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"][i],width=2)))
+    fig.update_layout(**LAYOUT, title="연금 자산 추이")
+    st.plotly_chart(fig, use_container_width=True)
