@@ -6,6 +6,23 @@ from supabase import create_client, Client
 from datetime import datetime, date
 import math
 
+def check_password():
+    if st.session_state.get("authenticated"):
+        return
+    st.markdown("# 💰 재무 대시보드")
+    pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+    if st.button("로그인", use_container_width=True):
+        if pw == st.secrets["APP_PASSWORD"]:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("비밀번호가 틀렸습니다")
+    st.stop()
+
+
+check_password()
+
+
 # ── 페이지 설정 ──────────────────────────────────────────────────
 st.set_page_config(
     page_title="재무 대시보드",
