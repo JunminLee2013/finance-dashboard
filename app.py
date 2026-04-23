@@ -92,7 +92,9 @@ def load_data() -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.DataFrame(res.data)
     df["date"] = pd.to_datetime(df["date"])
-    num_cols = df.columns.difference(["id", "created_at", "date"])
+    if "reference_month" in df.columns:
+        df["reference_month"] = pd.to_datetime(df["reference_month"])
+    num_cols = df.columns.difference(["id", "created_at", "date", "reference_month"])
     df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
     return df
 
@@ -156,13 +158,13 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "coin_ratio":        round(coin / fin * 100, 1) if fin else 0,
     }
 
-    # YTD 계산 (기존 데이터가 있을 때)
+    # YTD 계산 (reference_month 기준 연도의 첫 레코드 대비)
     if df_all is not None and not df_all.empty:
-        entry_date = pd.to_datetime(d.get("date"))
-        year_start = df_all[df_all["date"].dt.year == entry_date.year]
-        if not year_start.empty:
-            first = year_start.iloc[0]
-            net_start = first["net_assets"] if not pd.isna(first.get("net_assets")) else net
+        ref_col = "reference_month" if "reference_month" in df_all.columns else "date"
+        ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
+        same_year = df_all[df_all[ref_col].dt.year == ref_val.year].sort_values(ref_col)
+        if not same_year.empty:
+            net_start = float(same_year.iloc[0]["net_assets"]) if pd.notna(same_year.iloc[0].get("net_assets")) else net
             r["net_assets_ytd_krw"] = net - net_start
             r["net_assets_ytd_pct"] = round((net - net_start) / net_start * 100, 2) if net_start else 0
             r["net_assets_ytd_usd"] = round((net - net_start) / exr, 0)
@@ -262,9 +264,17 @@ if page == "📊 대시보드":
         card("총 부채", fmt_krw(latest["total_debt"]),
              sub=f"부채비율 {fmt_pct(latest['debt_ratio'])}", delta=d, color="red")
     with c4:
-        ytd = latest.get("net_assets_ytd_pct")
-        card("순자산 YTD", fmt_pct(ytd) if ytd else "—",
-             sub=fmt_krw(latest.get("net_assets_ytd_krw")), color="gold")
+        ref_col = "reference_month" if "reference_month" in df.columns else "date"
+        latest_ref = latest.get(ref_col)
+        if pd.notna(latest_ref):
+            _same_year = df[df[ref_col].dt.year == pd.to_datetime(latest_ref).year].sort_values(ref_col)
+            _net_start = float(_same_year.iloc[0]["net_assets"]) if not _same_year.empty else None
+            _ytd_krw = latest["net_assets"] - _net_start if _net_start is not None else None
+            _ytd_pct = _ytd_krw / _net_start * 100 if _net_start else None
+        else:
+            _ytd_krw, _ytd_pct = None, None
+        card("순자산 YTD", fmt_pct(_ytd_pct) if _ytd_pct is not None else "—",
+             sub=fmt_krw(_ytd_krw) if _ytd_krw is not None else "—", color="gold")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -409,8 +419,9 @@ elif page == "📝 데이터 입력":
 
     GROUPS = [
         ("📅 기본 정보", [
-            ("date",          "date",   None),
-            ("exchange_rate", "num",    dv("exchange_rate", 1300)),
+            ("reference_month", "ref_month", None),
+            ("date",            "date",      None),
+            ("exchange_rate",   "num",       dv("exchange_rate", 1300)),
         ]),
         ("💵 현금성 자산", [
             ("jm_cash",        "num", dv("jm_cash")),
@@ -456,7 +467,7 @@ elif page == "📝 데이터 입력":
     ]
 
     LABELS = {
-        "date":"날짜","exchange_rate":"환율 (₩/$)",
+        "reference_month":"기준월","date":"기록일","exchange_rate":"환율 (₩/$)",
         "jm_cash":"준민 현금","jm_subscription":"준민 주택청약",
         "em_cash":"은미 현금","em_subscription":"은미 주택청약",
         "jm_stock_book":"준민 주식 (납입)","jm_stock_value":"준민 주식 (평가)",
@@ -483,7 +494,12 @@ elif page == "📝 데이터 입력":
             for i, (key, ftype, default) in enumerate(fields):
                 with cols[i % ncols]:
                     lbl = LABELS.get(key, key)
-                    if ftype == "date":
+                    if ftype == "ref_month":
+                        _last_ref = last.get("reference_month")
+                        _def_ref = pd.to_datetime(_last_ref).date().replace(day=1) if _last_ref and pd.notna(_last_ref) else date.today().replace(day=1)
+                        v = st.date_input(lbl, value=_def_ref)
+                        inp["reference_month"] = v.replace(day=1).strftime("%Y-%m-%d")
+                    elif ftype == "date":
                         v = st.date_input(lbl, value=date.today().replace(day=1))
                         inp["date"] = v.strftime("%Y-%m-%d")
                     else:
@@ -538,7 +554,7 @@ elif page == "📋 데이터 관리":
 
     with tab_raw:
         RAW_COLS = {
-            "id": "ID", "date": "날짜",
+            "id": "ID", "reference_month": "기준월", "date": "기록일",
             "jm_cash": "준민현금", "jm_subscription": "준민청약",
             "em_cash": "은미현금", "em_subscription": "은미청약",
             "jm_stock_book": "준민주식(장부)", "jm_stock_value": "준민주식(평가)",
@@ -556,9 +572,11 @@ elif page == "📋 데이터 관리":
         }
         existing = [c for c in RAW_COLS if c in df.columns]
         raw = df[existing].copy()
-        raw["date"] = raw["date"].dt.strftime("%Y-%m")
+        raw["date"] = raw["date"].dt.strftime("%Y-%m-%d")
+        if "reference_month" in raw.columns:
+            raw["reference_month"] = raw["reference_month"].dt.strftime("%Y-%m")
         for c in raw.columns:
-            if c in ("id","date"): continue
+            if c in ("id","date","reference_month"): continue
             if c == "exchange_rate":
                 raw[c] = raw[c].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "—")
             else:

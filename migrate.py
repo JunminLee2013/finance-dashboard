@@ -148,9 +148,6 @@ COL_MAP = {
     "실물부채":                "real_debt",
     "부채_비율":               "debt_ratio",
 
-    # 순자산 YTD
-    "순자산_증감":              "net_assets_ytd_krw",
-
     # 연금
     "교직원공제회":             "teachers_mutual",
     "교직원공제회_원금":         "teachers_mutual_principal",
@@ -202,6 +199,8 @@ for _, row in raw.iterrows():
             parsed = parse_date(val)
             if parsed:
                 record["date"] = parsed
+                # reference_month = 해당 월의 1일 (YTD 기준월)
+                record["reference_month"] = parsed[:7] + "-01"
         else:
             num = safe_num(val)
             if num is not None:
