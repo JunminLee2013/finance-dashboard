@@ -1,6 +1,5 @@
 """
 migrate.py - 구글 스프레드시트 CSV -> Supabase 마이그레이션 스크립트
-supabase 라이브러리 없이 requests만 사용 (버전 충돌 방지)
 
 사용법:
   1. 구글 스프레드시트 -> 파일 -> 다운로드 -> CSV 저장 -> data.csv로 이름 변경
@@ -28,55 +27,140 @@ HEADERS = {
 API_URL = f"{SUPABASE_URL}/rest/v1/finance_monthly"
 print(f"\n접속 URL: {API_URL}\n")
 
-# 컬럼 매핑
+# CSV 로드
+print(f"CSV 읽는 중: {CSV_FILE}")
+try:
+    raw = pd.read_csv(CSV_FILE, encoding="utf-8-sig", header=0)
+except UnicodeDecodeError:
+    raw = pd.read_csv(CSV_FILE, encoding="cp949", header=0)
+
+print(f"  -> {len(raw)}행, {len(raw.columns)}열 발견")
+
+# 실제 CSV 헤더 순서대로 컬럼명 직접 지정
+# 중복 컬럼(평가액, 납입누계, 수익금, 은미연금저축 등)을 위치 기반으로 구분
+raw.columns = [
+    "날짜",
+    "자산_USD", "부채_USD", "순자산_USD",
+    "순자산YTD_USD", "순자산YTD_PCT",
+    "환율",
+    "자산", "부채", "순자산",
+    "유동자산", "비유동자산",
+    "유동자산_비중", "비유동자산_비중",
+    "유동순자산", "유동자산_주담대",
+    "금융자산", "실물자산",
+    "금융자산_비중", "실물자산_비중",
+    "금융순자산", "금융순자산YTD",
+    "유동금융자산", "비유동금융자산",
+    "현금성자산", "현금성자산_비중",
+    "주식", "주식_비중",
+    "코인", "코인_비중",
+    "준민_현금", "준민_주택청약",
+    "은미_현금", "은미_주택청약",
+    "준민_주식", "준민_주식_평가액",
+    "은미_주식", "은미_주식_평가액",
+    "코인_총매수", "코인_현금",
+    "부동산",
+    "실물자산_ROE", "실물자산_CAGR",
+    "실물자산_YTD_KRW", "실물자산_YTD_PCT",
+    "금융부채",
+    "준민_금융부채", "동금씨_투자금", "은미_금융부채", "카드값",
+    "금융부채_증감", "금융부채_증감율",
+    "실물부채", "부채총계", "부채_YTD", "부채_비율",
+    "순자산2", "순자산_증감", "순자산_YTD", "순자산_YTD_vs자산",
+    "교직원공제회",
+    "교직원공제회_원금", "교직원공제회_부가금",
+    "준민연금저축",
+    "준민연금저축_납입누계", "준민연금저축_수익금",
+    "은미연금저축",
+    "은미연금저축_납입누계", "은미연금저축_수익금",
+    "준민IRP",
+    "준민IRP_납입누계", "준민IRP_수익금",
+    "은미IRP",
+    "은미IRP_납입누계", "은미IRP_수익금",
+]
+
+# DB 컬럼 매핑 (CSV 컬럼명 -> DB 컬럼명)
 COL_MAP = {
-    "날짜":           "date",
-    "환율":           "exchange_rate",
-    "준민 현금":       "jm_cash",
-    "준민 주택청약":   "jm_subscription",
-    "은미 현금":       "em_cash",
-    "은미 주택청약":   "em_subscription",
-    "준민 주식":       "jm_stock_book",
-    "은미 주식":       "em_stock_book",
-    "코인-총매수":     "coin_total_buy",
-    "코인-현금":       "coin_cash",
-    "부동산":         "real_estate",
-    "준민 금융부채":   "jm_fin_debt",
-    "동금씨 투자금":   "donggum_invest",
-    "은미 금융부채":   "em_fin_debt",
-    "카드값":         "card_debt",
-    "실물부채":        "real_debt",
-    "교직원공제회":    "teachers_mutual",
-    "원금":           "teachers_mutual_principal",
-    "부가금":         "teachers_mutual_bonus",
-    "자산(USD)":      "total_assets_usd",
-    "부채(USD)":      "total_debt_usd",
-    "순자산(USD)":    "net_assets_usd",
-    "순자산YTD(USD)": "net_assets_ytd_usd",
-    "순자산YTD(%)":   "net_assets_ytd_pct",
-    "자산":           "total_assets",
-    "부채":           "total_debt",
-    "순자산":         "net_assets",
-    "유동자산":        "liquid_assets",
-    "비유동자산":      "illiquid_assets",
-    "유동자산 비중":   "liquid_ratio",
-    "비유동자산 비중": "illiquid_ratio",
-    "유동순자산":      "liquid_net_assets",
-    "금융자산":        "financial_assets",
-    "실물자산":        "real_assets",
-    "금융자산 비중":   "fin_asset_ratio",
-    "실물자산 비중":   "real_asset_ratio",
-    "금융순자산":      "fin_net_assets",
-    "금융순자산YTD":   "fin_net_assets_ytd",
-    "현금성 자산":     "cash_assets",
-    "현금성 자산 비중":"cash_ratio",
-    "주식":           "stock_assets",
-    "주식 비중":       "stock_ratio",
-    "코인":           "coin_assets",
-    "코인 비중":       "coin_ratio",
-    "금융부채":        "fin_debt",
-    "부채 비율":       "debt_ratio",
-    "순자산 증감":     "net_assets_ytd_krw",
+    "날짜":                   "date",
+    "환율":                   "exchange_rate",
+
+    # USD
+    "자산_USD":               "total_assets_usd",
+    "부채_USD":               "total_debt_usd",
+    "순자산_USD":              "net_assets_usd",
+    "순자산YTD_USD":           "net_assets_ytd_usd",
+    "순자산YTD_PCT":           "net_assets_ytd_pct",
+
+    # 자산/부채/순자산 합계
+    "자산":                   "total_assets",
+    "부채":                   "total_debt",
+    "순자산":                  "net_assets",
+
+    # 유동/비유동
+    "유동자산":                "liquid_assets",
+    "비유동자산":               "illiquid_assets",
+    "유동자산_비중":            "liquid_ratio",
+    "비유동자산_비중":           "illiquid_ratio",
+    "유동순자산":               "liquid_net_assets",
+
+    # 금융/실물
+    "금융자산":                "financial_assets",
+    "실물자산":                "real_assets",
+    "금융자산_비중":            "fin_asset_ratio",
+    "실물자산_비중":            "real_asset_ratio",
+    "금융순자산":               "fin_net_assets",
+    "금융순자산YTD":            "fin_net_assets_ytd",
+
+    # 현금/주식/코인 합산
+    "유동금융자산":             "cash_assets",
+    "현금성자산":               "cash_assets",
+    "현금성자산_비중":           "cash_ratio",
+    "주식":                   "stock_assets",
+    "주식_비중":               "stock_ratio",
+    "코인":                   "coin_assets",
+    "코인_비중":               "coin_ratio",
+
+    # 원본 입력값
+    "준민_현금":               "jm_cash",
+    "준민_주택청약":            "jm_subscription",
+    "은미_현금":               "em_cash",
+    "은미_주택청약":            "em_subscription",
+    "준민_주식":               "jm_stock_book",
+    "준민_주식_평가액":          "jm_stock_value",
+    "은미_주식":               "em_stock_book",
+    "은미_주식_평가액":          "em_stock_value",
+    "코인_총매수":              "coin_total_buy",
+    "코인_현금":               "coin_cash",
+    "부동산":                  "real_estate",
+
+    # 실물자산 수익률
+    "실물자산_ROE":            "real_asset_roe",
+    "실물자산_CAGR":           "real_asset_cagr",
+
+    # 부채
+    "금융부채":                "fin_debt",
+    "준민_금융부채":            "jm_fin_debt",
+    "동금씨_투자금":            "donggum_invest",
+    "은미_금융부채":            "em_fin_debt",
+    "카드값":                  "card_debt",
+    "실물부채":                "real_debt",
+    "부채_비율":               "debt_ratio",
+
+    # 순자산 YTD
+    "순자산_증감":              "net_assets_ytd_krw",
+
+    # 연금
+    "교직원공제회":             "teachers_mutual",
+    "교직원공제회_원금":         "teachers_mutual_principal",
+    "교직원공제회_부가금":        "teachers_mutual_bonus",
+    "준민연금저축_납입누계":      "jm_pension_total",
+    "준민연금저축_수익금":        "jm_pension_profit",
+    "은미연금저축_납입누계":      "em_pension_total",
+    "은미연금저축_수익금":        "em_pension_profit",
+    "준민IRP_납입누계":          "jm_irp_total",
+    "준민IRP_수익금":            "jm_irp_profit",
+    "은미IRP_납입누계":          "em_irp_total",
+    "은미IRP_수익금":            "em_irp_profit",
 }
 
 def safe_num(v):
@@ -95,48 +179,24 @@ def parse_date(v):
     except:
         return None
 
-# CSV 로드
-print(f"CSV 읽는 중: {CSV_FILE}")
-try:
-    raw = pd.read_csv(CSV_FILE, encoding="utf-8-sig")
-except UnicodeDecodeError:
-    raw = pd.read_csv(CSV_FILE, encoding="cp949")
-
-print(f"  -> {len(raw)}행 발견")
-
-# 중복 컬럼 처리
-cols = list(raw.columns)
-
-eval_idx = [i for i, c in enumerate(cols) if c == "평가액"]
-if len(eval_idx) >= 1: cols[eval_idx[0]] = "준민 주식 평가액"; COL_MAP["준민 주식 평가액"] = "jm_stock_value"
-if len(eval_idx) >= 2: cols[eval_idx[1]] = "은미 주식 평가액"; COL_MAP["은미 주식 평가액"] = "em_stock_value"
-
-cum_idx = [i for i, c in enumerate(cols) if c == "납입누계"]
-for i, (ci, ck) in enumerate(zip(cum_idx, ["jm_pension_total","em_pension_total","jm_irp_total","em_irp_total"])):
-    name = f"납입누계_{i+1}"; cols[ci] = name; COL_MAP[name] = ck
-
-profit_idx = [i for i, c in enumerate(cols) if c == "수익금"]
-for i, (pi, pk) in enumerate(zip(profit_idx, ["jm_pension_profit","em_pension_profit","jm_irp_profit","em_irp_profit"])):
-    name = f"수익금_{i+1}"; cols[pi] = name; COL_MAP[name] = pk
-
-raw.columns = cols
-
 # 업로드
 print("Supabase 업로드 중...\n")
 success, fail = 0, 0
 
 for _, row in raw.iterrows():
     record = {}
-    for sheet_col, db_col in COL_MAP.items():
-        if sheet_col in row.index:
-            val = row[sheet_col]
-            if db_col == "date":
-                parsed = parse_date(val)
-                if parsed: record["date"] = parsed
-            else:
-                num = safe_num(val)
-                if num is not None:
-                    record[db_col] = num
+    for csv_col, db_col in COL_MAP.items():
+        if csv_col not in row.index:
+            continue
+        val = row[csv_col]
+        if db_col == "date":
+            parsed = parse_date(val)
+            if parsed:
+                record["date"] = parsed
+        else:
+            num = safe_num(val)
+            if num is not None:
+                record[db_col] = num
 
     if "date" not in record:
         fail += 1

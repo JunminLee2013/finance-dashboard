@@ -493,21 +493,58 @@ elif page == "📋 데이터 관리":
     if df.empty:
         st.info("저장된 데이터가 없습니다."); st.stop()
 
-    disp = df[["id","date","total_assets","total_debt","net_assets",
-               "financial_assets","real_assets","cash_assets","stock_assets",
-               "coin_assets","debt_ratio","exchange_rate"]].copy()
-    disp["date"] = disp["date"].dt.strftime("%Y-%m")
-    for c in disp.columns:
-        if c in ("id","date"): continue
-        if "ratio" in c or "pct" in c:
-            disp[c] = disp[c].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-        elif c == "exchange_rate":
-            disp[c] = disp[c].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "—")
-        else:
-            disp[c] = disp[c].apply(fmt_krw)
+    tab_sum, tab_raw, tab_all = st.tabs(["📊 요약", "📝 원본 입력", "🗂️ 전체 데이터"])
 
-    disp.columns = ["ID","날짜","자산","부채","순자산","금융자산","실물자산","현금성","주식","코인","부채비율","환율"]
-    st.dataframe(disp.iloc[::-1], use_container_width=True, hide_index=True)
+    with tab_sum:
+        disp = df[["id","date","total_assets","total_debt","net_assets",
+                   "financial_assets","real_assets","cash_assets","stock_assets",
+                   "coin_assets","debt_ratio","exchange_rate"]].copy()
+        disp["date"] = disp["date"].dt.strftime("%Y-%m")
+        for c in disp.columns:
+            if c in ("id","date"): continue
+            if "ratio" in c or "pct" in c:
+                disp[c] = disp[c].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+            elif c == "exchange_rate":
+                disp[c] = disp[c].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "—")
+            else:
+                disp[c] = disp[c].apply(fmt_krw)
+        disp.columns = ["ID","날짜","자산","부채","순자산","금융자산","실물자산","현금성","주식","코인","부채비율","환율"]
+        st.dataframe(disp.iloc[::-1], use_container_width=True, hide_index=True)
+
+    with tab_raw:
+        RAW_COLS = {
+            "id": "ID", "date": "날짜",
+            "jm_cash": "준민현금", "jm_subscription": "준민청약",
+            "em_cash": "은미현금", "em_subscription": "은미청약",
+            "jm_stock_book": "준민주식(장부)", "jm_stock_value": "준민주식(평가)",
+            "em_stock_book": "은미주식(장부)", "em_stock_value": "은미주식(평가)",
+            "coin_total_buy": "코인총매수", "coin_cash": "코인평가",
+            "real_estate": "부동산", "exchange_rate": "환율",
+            "jm_fin_debt": "준민금융부채", "donggum_invest": "동금씨투자금",
+            "em_fin_debt": "은미금융부채", "card_debt": "카드값", "real_debt": "실물부채",
+            "teachers_mutual": "교직원공제회", "teachers_mutual_principal": "공제회원금",
+            "teachers_mutual_bonus": "공제회부가금",
+            "jm_pension_total": "준민연금납입", "jm_pension_profit": "준민연금수익",
+            "em_pension_total": "은미연금납입", "em_pension_profit": "은미연금수익",
+            "jm_irp_total": "준민IRP납입", "jm_irp_profit": "준민IRP수익",
+            "em_irp_total": "은미IRP납입", "em_irp_profit": "은미IRP수익",
+        }
+        existing = [c for c in RAW_COLS if c in df.columns]
+        raw = df[existing].copy()
+        raw["date"] = raw["date"].dt.strftime("%Y-%m")
+        for c in raw.columns:
+            if c in ("id","date"): continue
+            if c == "exchange_rate":
+                raw[c] = raw[c].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "—")
+            else:
+                raw[c] = raw[c].apply(fmt_krw)
+        raw.columns = [RAW_COLS[c] for c in existing]
+        st.dataframe(raw.iloc[::-1], use_container_width=True, hide_index=True)
+
+    with tab_all:
+        all_disp = df.copy()
+        all_disp["date"] = all_disp["date"].dt.strftime("%Y-%m")
+        st.dataframe(all_disp.iloc[::-1], use_container_width=True, hide_index=True)
 
     st.markdown("---")
     c1, c2 = st.columns([3, 1])
