@@ -136,6 +136,8 @@ COL_MAP = {
     # 실물자산 수익률
     "실물자산_ROE":            "real_asset_roe",
     "실물자산_CAGR":           "real_asset_cagr",
+    "실물자산_YTD_KRW":        "real_asset_ytd",
+    "실물자산_YTD_PCT":        "real_asset_ytd_pct",
 
     # 부채
     "금융부채":                "fin_debt",
