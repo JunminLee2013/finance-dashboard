@@ -37,42 +37,42 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap');
 
 html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
-.stApp { background: #0d1117; color: #e6edf3; }
-[data-testid="stSidebar"] { background: #161b22 !important; border-right: 1px solid #30363d; }
+.stApp { background: #f6f8fa; color: #24292f; }
+[data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #d0d7de; }
 
 .metric-card {
-    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    background: #ffffff; border: 1px solid #d0d7de; border-radius: 12px;
     padding: 18px 20px; position: relative; overflow: hidden; margin-bottom: 4px;
 }
 .metric-card::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:2px;
-    background: linear-gradient(90deg,#238636,#2ea043);
+    content:''; position:absolute; top:0; left:0; right:0; height:3px;
+    background: linear-gradient(90deg,#1a7f37,#2da44e);
 }
-.metric-card.red::before  { background: linear-gradient(90deg,#da3633,#f85149); }
-.metric-card.blue::before { background: linear-gradient(90deg,#1f6feb,#388bfd); }
-.metric-card.gold::before { background: linear-gradient(90deg,#9e6a03,#d29922); }
-.metric-card.gray::before { background: linear-gradient(90deg,#30363d,#6e7681); }
+.metric-card.red::before  { background: linear-gradient(90deg,#cf222e,#fa4549); }
+.metric-card.blue::before { background: linear-gradient(90deg,#0550ae,#0969da); }
+.metric-card.gold::before { background: linear-gradient(90deg,#7d4e00,#bf8700); }
+.metric-card.gray::before { background: linear-gradient(90deg,#57606a,#8c959f); }
 
-.metric-label { font-size:11px; color:#8b949e; letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px; }
-.metric-value { font-family:'Space Mono',monospace; font-size:22px; font-weight:700; color:#e6edf3; line-height:1; }
-.metric-sub   { font-size:11px; color:#8b949e; margin-top:5px; }
+.metric-label { font-size:11px; color:#57606a; letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px; }
+.metric-value { font-family:'Space Mono',monospace; font-size:22px; font-weight:700; color:#24292f; line-height:1; }
+.metric-sub   { font-size:11px; color:#57606a; margin-top:5px; }
 .metric-delta { font-size:12px; margin-top:4px; font-family:'Space Mono',monospace; }
-.dp { color:#2ea043; } .dn { color:#f85149; }
+.dp { color:#1a7f37; } .dn { color:#cf222e; }
 
-.sec { font-size:12px; font-weight:500; color:#8b949e; text-transform:uppercase;
-       letter-spacing:.1em; padding:14px 0 8px; border-bottom:1px solid #21262d; margin-bottom:14px; }
+.sec { font-size:12px; font-weight:500; color:#57606a; text-transform:uppercase;
+       letter-spacing:.1em; padding:14px 0 8px; border-bottom:1px solid #d0d7de; margin-bottom:14px; }
 
-div[data-testid="stForm"] { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:20px; }
-.stButton>button { background:#238636!important; color:white!important; border:none!important;
+div[data-testid="stForm"] { background:#ffffff; border:1px solid #d0d7de; border-radius:12px; padding:20px; }
+.stButton>button { background:#1a7f37!important; color:white!important; border:none!important;
                    border-radius:6px!important; font-weight:500!important; width:100%; }
-.stButton>button:hover { background:#2ea043!important; }
-.stTabs [data-baseweb="tab-list"] { background:transparent; border-bottom:1px solid #30363d; }
-.stTabs [data-baseweb="tab"] { color:#8b949e; background:transparent; border:none; padding:8px 18px; font-size:14px; }
-.stTabs [aria-selected="true"] { color:#e6edf3!important; border-bottom:2px solid #2ea043!important; }
+.stButton>button:hover { background:#2da44e!important; }
+.stTabs [data-baseweb="tab-list"] { background:transparent; border-bottom:1px solid #d0d7de; }
+.stTabs [data-baseweb="tab"] { color:#57606a; background:transparent; border:none; padding:8px 18px; font-size:14px; }
+.stTabs [aria-selected="true"] { color:#24292f!important; border-bottom:2px solid #1a7f37!important; }
 .stNumberInput input, .stTextInput input, .stDateInput input {
-    background:#0d1117!important; border:1px solid #30363d!important; color:#e6edf3!important; border-radius:6px!important;
+    background:#ffffff!important; border:1px solid #d0d7de!important; color:#24292f!important; border-radius:6px!important;
 }
-h1,h2,h3 { color:#e6edf3!important; }
+h1,h2,h3 { color:#24292f!important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -224,7 +224,7 @@ with st.sidebar:
     st.markdown("---")
     if st.button("🔄 새로고침"):
         st.cache_data.clear(); st.rerun()
-    st.markdown(f"<div style='color:#8b949e;font-size:11px'>{datetime.now().strftime('%Y-%m-%d %H:%M')} 기준</div>",
+    st.markdown(f"<div style='color:#57606a;font-size:11px'>{datetime.now().strftime('%Y-%m-%d %H:%M')} 기준</div>",
                 unsafe_allow_html=True)
 
 df = load_data()
@@ -242,8 +242,8 @@ if page == "📊 대시보드":
     latest = df.iloc[-1]
     prev   = df.iloc[-2] if len(df) > 1 else None
 
-    st.markdown(f"<div style='color:#8b949e;font-size:13px;margin-bottom:20px'>"
-                f"📅 최신: <b style='color:#e6edf3'>{latest['date'].strftime('%Y년 %m월')}</b>"
+    st.markdown(f"<div style='color:#57606a;font-size:13px;margin-bottom:20px'>"
+                f"📅 최신: <b style='color:#24292f'>{latest['date'].strftime('%Y년 %m월')}</b>"
                 f" &nbsp;|&nbsp; 총 {len(df)}개월 기록</div>", unsafe_allow_html=True)
 
     # 핵심 지표
@@ -371,7 +371,7 @@ if page == "📊 대시보드":
 # ══════════════════════════════════════════════════════════════════
 elif page == "📝 데이터 입력":
     st.markdown("# 월별 데이터 입력")
-    st.markdown("<div style='color:#8b949e;font-size:13px;margin-bottom:24px'>"
+    st.markdown("<div style='color:#57606a;font-size:13px;margin-bottom:24px'>"
                 "매월 말 기준 데이터를 입력하세요. 파생 지표는 자동 계산됩니다.</div>",
                 unsafe_allow_html=True)
 
