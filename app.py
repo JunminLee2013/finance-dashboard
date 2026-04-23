@@ -640,24 +640,27 @@ elif page == "📈 상세 분석":
     # 자산 비중
     st.markdown('<div class="sec">자산 비중 변화</div>', unsafe_allow_html=True)
     def _col(col): return df[col].fillna(0) if col in df.columns else pd.Series(0, index=df.index, dtype=float)
-    _cash    = _col("jm_cash") + _col("jm_subscription") + _col("em_cash") + _col("em_subscription")
-    _stk     = _col("jm_stock_value") + _col("em_stock_value")
-    _coin    = _col("coin_cash")
-    _real    = _col("real_estate")
+    # 저장된 파생 컬럼 사용 (calc_derived로 정확히 계산된 값)
+    _real     = _col("real_assets")
+    _real     = _real.where(_real > 0, _col("real_estate"))   # 구 데이터 fallback
+    _liq_fin  = _col("financial_assets")                       # cash+stk+coin 합계
+    _cash     = _col("cash_assets")
+    _stk      = _col("stock_assets")
+    _coin     = _col("coin_assets")
+    # 연금은 개별 raw 컬럼 사용 (집계 컬럼 없음)
     _tm      = _col("teachers_mutual")
     _jm_pen  = _col("jm_pension_total") + _col("jm_pension_profit")
     _em_pen  = _col("em_pension_total") + _col("em_pension_profit")
     _jm_irp  = _col("jm_irp_total") + _col("jm_irp_profit")
     _em_irp  = _col("em_irp_total") + _col("em_irp_profit")
-    _liquid_fin = _cash + _stk + _coin
     _illiquid_fin = _tm + _jm_pen + _em_pen + _jm_irp + _em_irp
 
     view = st.radio("보기 방식", ["요약 (3가지)", "세부 (9가지)"], horizontal=True, label_visibility="collapsed")
     fig = go.Figure()
     if view == "요약 (3가지)":
         traces = [
-            (_real,         "실물",         "#8c959f"),
-            (_liquid_fin,   "유동금융자산",  "#0969da"),
+            (_real,         "실물",              "#8c959f"),
+            (_liq_fin,      "유동금융자산",       "#0969da"),
             (_illiquid_fin, "비유동금융자산(연금)", "#bf8700"),
         ]
     else:
@@ -666,11 +669,11 @@ elif page == "📈 상세 분석":
             (_coin,    "코인",        "#bf8700"),
             (_stk,     "주식",        "#0969da"),
             (_cash,    "현금성",      "#2da44e"),
-            (_tm,      "교직원공제회", "#8250df"),
-            (_jm_pen,  "준민연금저축", "#bc8cff"),
-            (_em_pen,  "은미연금저축", "#d2a8ff"),
-            (_jm_irp,  "준민IRP",     "#cf4945"),
-            (_em_irp,  "은미IRP",     "#fa8a87"),
+            (_tm,      "교직원공제회",  "#8250df"),
+            (_jm_pen,  "준민연금저축",  "#bc8cff"),
+            (_em_pen,  "은미연금저축",  "#d2a8ff"),
+            (_jm_irp,  "준민IRP",      "#cf4945"),
+            (_em_irp,  "은미IRP",      "#fa8a87"),
         ]
     for vals, name, color in traces:
         fig.add_trace(go.Scatter(x=df["date"], y=vals, name=name,
