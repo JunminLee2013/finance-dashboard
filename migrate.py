@@ -169,9 +169,15 @@ def safe_num(v):
     if v is None: return None
     if isinstance(v, float) and math.isnan(v): return None
     try:
-        # 달러($)와 원화(₩) 기호도 함께 제거
+        # 달러($), 원화(₩), 쉼표, 퍼센트 기호 제거 및 양옆 공백 제거
         s = str(v).replace(",", "").replace("%", "").replace("$", "").replace("₩", "").strip()
+
         if s in ("", "-", "—", "N/A", "#N/A", "nan"): return None
+
+        # 괄호로 묶인 음수 처리: (123) -> -123
+        if s.startswith("(") and s.endswith(")"):
+            s = "-" + s[1:-1]
+
         return float(s)
     except:
         return None
