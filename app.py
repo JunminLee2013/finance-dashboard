@@ -207,11 +207,11 @@ def card(label, val, sub="", delta=None, delta_pct=None, color="green"):
     </div>""", unsafe_allow_html=True)
 
 LAYOUT = dict(
-    paper_bgcolor="#0d1117", plot_bgcolor="#0d1117",
-    font=dict(color="#8b949e", family="Noto Sans KR"),
-    xaxis=dict(gridcolor="#21262d", linecolor="#30363d"),
-    yaxis=dict(gridcolor="#21262d", linecolor="#30363d"),
-    legend=dict(bgcolor="rgba(0,0,0,0)"),
+    paper_bgcolor="#ffffff", plot_bgcolor="#f6f8fa",
+    font=dict(color="#57606a", family="Noto Sans KR"),
+    xaxis=dict(gridcolor="#d0d7de", linecolor="#d0d7de"),
+    yaxis=dict(gridcolor="#d0d7de", linecolor="#d0d7de"),
+    legend=dict(bgcolor="#ffffff", bordercolor="#d0d7de", borderwidth=1),
     margin=dict(l=0, r=0, t=40, b=0), hovermode="x unified",
 )
 
