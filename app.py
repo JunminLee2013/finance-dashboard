@@ -639,13 +639,16 @@ elif page == "📈 상세 분석":
 
     # 자산 비중
     st.markdown('<div class="sec">자산 비중 변화</div>', unsafe_allow_html=True)
+    def _col(col): return df[col].fillna(0) if col in df.columns else pd.Series(0, index=df.index, dtype=float)
+    _cash = _col("jm_cash") + _col("jm_subscription") + _col("em_cash") + _col("em_subscription")
+    _stk  = _col("jm_stock_value") + _col("em_stock_value")
+    _coin = _col("coin_cash")
+    _real = _col("real_estate")
     fig = go.Figure()
-    ratio_items = [("cash_ratio","현금성","#2ea043"),("stock_ratio","주식","#388bfd"),
-                   ("coin_ratio","코인","#d29922"),("real_asset_ratio","실물","#6e7681")]
-    for k,n,c in ratio_items:
-        if k in df.columns:
-            fig.add_trace(go.Scatter(x=df["date"],y=df[k],name=n,
-                line=dict(color=c,width=2),stackgroup="one",groupnorm="percent"))
+    for vals, name, color in [(_cash,"현금성","#2da44e"),(_stk,"주식","#0969da"),
+                               (_coin,"코인","#bf8700"),(_real,"실물","#8c959f")]:
+        fig.add_trace(go.Scatter(x=df["date"], y=vals, name=name,
+            line=dict(color=color, width=2), stackgroup="one", groupnorm="percent"))
     fig.update_layout(**LAYOUT, title="자산 비중 추이 (%)", yaxis_title="%")
     st.plotly_chart(fig, use_container_width=True)
 
