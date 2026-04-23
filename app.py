@@ -286,47 +286,61 @@ if page == "📊 대시보드":
     st.markdown("<br>", unsafe_allow_html=True)
 
     # 차트
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 순자산 추이", "🏦 자산 구성", "💳 부채 현황", "🎯 연금"])
+    tab1, tab1b, tab2, tab3, tab4 = st.tabs(["📈 순자산 추이", "💹 금융순자산 추이", "🏦 자산 구성", "💳 부채 현황", "🎯 연금"])
 
     with tab1:
         fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets"], name="순자산",
-            line=dict(color="#2ea043",width=2.5), fill="tozeroy", fillcolor="rgba(46,160,67,0.08)"), secondary_y=False)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets"], name="총자산",
-            line=dict(color="#388bfd",width=1.5,dash="dot")), secondary_y=False)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채",
-            line=dict(color="#f85149",width=1.5,dash="dot")), secondary_y=False)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["exchange_rate"], name="환율",
-            line=dict(color="#d29922",width=1,dash="dash")), secondary_y=True)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets"], name="순자산(KRW)",
+            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets"], name="총자산(KRW)",
+            line=dict(color="#0969da",width=1.5,dash="dot")), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채(KRW)",
+            line=dict(color="#cf222e",width=1.5,dash="dot")), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets_usd"], name="순자산(USD)",
+            line=dict(color="#2da44e",width=2,dash="dash")), secondary_y=True)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets_usd"], name="총자산(USD)",
+            line=dict(color="#388bfd",width=1,dash="dash")), secondary_y=True)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt_usd"], name="총부채(USD)",
+            line=dict(color="#fa4549",width=1,dash="dash")), secondary_y=True)
         fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
-                          yaxis_title="원", yaxis2_title="환율(₩/$)")
+                          yaxis_title="원(₩)", yaxis2_title="달러($)")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab1b:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df["date"], y=df["financial_assets"], name="금융자산",
+            line=dict(color="#0969da",width=2)))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채",
+            line=dict(color="#cf222e",width=2,dash="dot")))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["fin_net_assets"], name="금융순자산",
+            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
+        fig.update_layout(**LAYOUT, title="금융순자산 추이", yaxis_title="원(₩)")
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
         c1, c2 = st.columns(2)
         with c1:
-            fig = go.Figure(go.Pie(
-                labels=["금융자산","실물자산"],
-                values=[latest.get("financial_assets",0), latest.get("real_assets",0)],
-                hole=0.55, marker_colors=["#388bfd","#d29922"]))
-            fig.update_layout(**LAYOUT, title="금융 vs 실물")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df["date"], y=df["financial_assets"], name="금융자산",
+                line=dict(color="#0969da",width=2)))
+            fig.add_trace(go.Scatter(x=df["date"], y=df["real_assets"], name="실물자산",
+                line=dict(color="#bf8700",width=2)))
+            fig.update_layout(**LAYOUT, title="금융 vs 실물 추이", yaxis_title="원(₩)")
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            c_ = latest.get("cash_assets",0) or 0
-            s_ = latest.get("stock_assets",0) or 0
-            k_ = latest.get("coin_assets",0) or 0
-            fig = go.Figure(go.Pie(
-                labels=["현금성","주식","코인"],
-                values=[c_, s_, k_], hole=0.55,
-                marker_colors=["#2ea043","#388bfd","#d29922"]))
-            fig.update_layout(**LAYOUT, title="금융자산 세부")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"], name="유동자산",
+                line=dict(color="#0969da",width=2)))
+            fig.add_trace(go.Scatter(x=df["date"], y=df["illiquid_assets"], name="비유동자산",
+                line=dict(color="#8c959f",width=2)))
+            fig.update_layout(**LAYOUT, title="유동 vs 비유동 추이", yaxis_title="원(₩)")
             st.plotly_chart(fig, use_container_width=True)
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=df["date"], y=df["cash_assets"],  name="현금성", marker_color="#2ea043"))
-        fig.add_trace(go.Bar(x=df["date"], y=df["stock_assets"], name="주식",   marker_color="#388bfd"))
-        fig.add_trace(go.Bar(x=df["date"], y=df["coin_assets"],  name="코인",   marker_color="#d29922"))
-        fig.add_trace(go.Bar(x=df["date"], y=df["real_assets"],  name="실물",   marker_color="#6e7681"))
+        fig.add_trace(go.Bar(x=df["date"], y=df["cash_assets"],  name="현금성", marker_color="#2da44e"))
+        fig.add_trace(go.Bar(x=df["date"], y=df["stock_assets"], name="주식",   marker_color="#0969da"))
+        fig.add_trace(go.Bar(x=df["date"], y=df["coin_assets"],  name="코인",   marker_color="#bf8700"))
+        fig.add_trace(go.Bar(x=df["date"], y=df["real_assets"],  name="실물",   marker_color="#8c959f"))
         fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이")
         st.plotly_chart(fig, use_container_width=True)
 
