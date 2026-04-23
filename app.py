@@ -286,7 +286,7 @@ if page == "📊 대시보드":
     st.markdown("<br>", unsafe_allow_html=True)
 
     # 차트
-    tab1, tab1b, tab2, tab3, tab4 = st.tabs(["📈 순자산 추이", "💹 금융순자산 추이", "🏦 자산 구성", "💳 부채 현황", "🎯 연금"])
+    tab1, tab1b, tab1c, tab2, tab3, tab4 = st.tabs(["📈 순자산 추이", "💹 금융순자산 추이", "💧 유동순자산 추이", "🏦 자산 구성", "💳 부채 현황", "🎯 연금"])
 
     with tab1:
         fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -315,6 +315,17 @@ if page == "📊 대시보드":
         fig.add_trace(go.Scatter(x=df["date"], y=df["fin_net_assets"], name="금융순자산",
             line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
         fig.update_layout(**LAYOUT, title="금융순자산 추이", yaxis_title="원(₩)")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab1c:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"], name="유동자산",
+            line=dict(color="#0969da",width=2)))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채",
+            line=dict(color="#cf222e",width=2,dash="dot")))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_net_assets"], name="유동순자산",
+            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
+        fig.update_layout(**LAYOUT, title="유동순자산 추이", yaxis_title="원(₩)")
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
