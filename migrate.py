@@ -87,7 +87,7 @@ COL_MAP = {
     # USD
     "자산_USD":               "total_assets_usd",
     "부채_USD":               "total_debt_usd",
-    "순자산_USD":              "net_assets_usd",
+    "순자산_USD":               "net_assets_usd",
     "순자산YTD_USD":           "net_assets_ytd_usd",
     "순자산YTD_PCT":           "net_assets_ytd_pct",
 
@@ -167,7 +167,8 @@ def safe_num(v):
     if v is None: return None
     if isinstance(v, float) and math.isnan(v): return None
     try:
-        s = str(v).replace(",", "").replace("%", "").strip()
+        # 달러($)와 원화(₩) 기호도 함께 제거
+        s = str(v).replace(",", "").replace("%", "").replace("$", "").replace("₩", "").strip()
         if s in ("", "-", "—", "N/A", "#N/A", "nan"): return None
         return float(s)
     except:
