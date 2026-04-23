@@ -610,20 +610,22 @@ elif page == "📈 상세 분석":
         st.info("최소 2개월 이상의 데이터가 필요합니다."); st.stop()
 
     latest = df.iloc[-1]
-    year = latest["date"].year
-    ydf  = df[df["date"].dt.year == year]
+    _ref_col = "reference_month" if "reference_month" in df.columns and df["reference_month"].notna().any() else "date"
+    year = pd.to_datetime(latest[_ref_col]).year
+    ydf  = df[df[_ref_col].dt.year == year].sort_values(_ref_col)
 
     if len(ydf) > 1:
         st.markdown('<div class="sec">올해 YTD</div>', unsafe_allow_html=True)
         y0 = ydf.iloc[0]
         c1,c2,c3,c4 = st.columns(4)
-        def yd(k): return latest.get(k,0) - y0.get(k,0)
-        with c1: card("순자산 증감", fmt_krw(yd("net_assets")),
-                      sub=fmt_pct(yd("net_assets")/y0.get("net_assets",1)*100 if y0.get("net_assets") else 0),
-                      delta=yd("net_assets"), color="green")
+        def yd(k): return float(latest.get(k) or 0) - float(y0.get(k) or 0)
+        _ytd_krw = yd("net_assets")
+        _ytd_pct = _ytd_krw / float(y0.get("net_assets") or 1) * 100 if y0.get("net_assets") else 0
+        with c1: card("순자산 증감", fmt_krw(_ytd_krw),
+                      sub=fmt_pct(_ytd_pct), delta=_ytd_krw, color="green")
         with c2: card("금융자산 증감", fmt_krw(yd("financial_assets")), delta=yd("financial_assets"), color="blue")
         with c3: card("부채 증감", fmt_krw(yd("total_debt")), delta=yd("total_debt"), color="red")
-        with c4: card("YTD 수익률", fmt_pct(latest.get("net_assets_ytd_pct")), color="gold")
+        with c4: card("YTD 수익률", fmt_pct(_ytd_pct), color="gold")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
