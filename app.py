@@ -125,10 +125,10 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     real = g("real_estate")
 
     pension = (g("teachers_mutual_principal") + g("teachers_mutual_bonus") +
-               g("jm_pension_total") + g("jm_pension_profit") +
-               g("em_pension_total") + g("em_pension_profit") +
-               g("jm_irp_total") + g("jm_irp_profit") +
-               g("em_irp_total") + g("em_irp_profit"))
+               g("jm_pension_principal") + g("jm_pension_profit") +
+               g("em_pension_principal") + g("em_pension_profit") +
+               g("jm_irp_principal") + g("jm_irp_profit") +
+               g("em_irp_principal") + g("em_irp_profit"))
 
     liquid_a   = fin_liq + real        # 유동자산: 현금+주식+코인+부동산
     fin = fin_liq + pension  # 금융자산; 유동금융자산 + 연금
