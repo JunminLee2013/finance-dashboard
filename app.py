@@ -118,10 +118,10 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     g = lambda k: float(d.get(k) or 0)
 
     exr  = g("exchange_rate") or 1300
-    cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription")
+    cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription") + g("coin_cash")
     stk  = g("jm_stock_book") + g("em_stock_book")   # 원화평가금액(총액)
     coin = g("coin_assets")
-    fin  = cash + stk + coin   # financial_assets = 현금+주식+코인
+    fin_liq  = cash + stk + coin   # financial_assets = 현금+주식+코인
     real = g("real_estate")
 
     pension = (g("teachers_mutual_principal") + g("teachers_mutual_bonus") +
@@ -130,7 +130,8 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
                g("jm_irp_total") + g("jm_irp_profit") +
                g("em_irp_total") + g("em_irp_profit"))
 
-    liquid_a   = fin + real        # 유동자산: 현금+주식+코인+부동산
+    liquid_a   = fin_liq + real        # 유동자산: 현금+주식+코인+부동산
+    fin = fin_liq + pension  # 금융자산; 유동금융자산 + 연금
     illiquid_a = pension            # 비유동자산: 연금
     total_a    = liquid_a + illiquid_a
 
@@ -155,7 +156,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "stock_assets":      stk,
         "coin_assets":       coin,
         "financial_assets":  fin,
-        "fin_liq_assets":    fin,
+        "fin_liq_assets":    fin_liq,
         "real_assets":       real,
         "liquid_assets":     liquid_a,
         "illiquid_assets":   illiquid_a,
@@ -167,7 +168,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "net_assets":        net,
         "net_assets_usd":    round(net / exr, 0),
         "liquid_net_assets": liquid_a - total_d,
-        "fin_net_assets":    fin - fin_debt,
+        "fin_net_assets":    fin - total_d,
         "teachers_mutual":   g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
         "real_asset_roe":    round(real_roe * 100, 2),
         "real_asset_cagr":   round(real_cagr * 100, 2),
@@ -176,9 +177,9 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "illiquid_ratio":    round(illiquid_a / total_a * 100, 1) if total_a else 0,
         "fin_asset_ratio":   round(fin / total_a * 100, 1) if total_a else 0,
         "real_asset_ratio":  round(real / total_a * 100, 1) if total_a else 0,
-        "cash_ratio":        round(cash / fin * 100, 1) if fin else 0,
-        "stock_ratio":       round(stk / fin * 100, 1) if fin else 0,
-        "coin_ratio":        round(coin / fin * 100, 1) if fin else 0,
+        "cash_ratio":        round(cash / fin_liq * 100, 1) if fin_liq else 0,
+        "stock_ratio":       round(stk / fin_liq * 100, 1) if fin_liq else 0,
+        "coin_ratio":        round(coin / fin_liq * 100, 1) if fin_liq else 0,
     }
 
     # YTD 계산 (reference_month 기준 연도의 첫 레코드 대비)
