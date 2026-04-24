@@ -172,14 +172,14 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "teachers_mutual":   g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
         "real_asset_roe":    round(real_roe * 100, 2),
         "real_asset_cagr":   round(real_cagr * 100, 2),
-        "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
-        "liquid_ratio":      round(liquid_a / total_a * 100, 1) if total_a else 0,
-        "illiquid_ratio":    round(illiquid_a / total_a * 100, 1) if total_a else 0,
-        "fin_asset_ratio":   round(fin / total_a * 100, 1) if total_a else 0,
-        "real_asset_ratio":  round(real / total_a * 100, 1) if total_a else 0,
-        "cash_ratio":        round(cash / fin_liq * 100, 1) if fin_liq else 0,
-        "stock_ratio":       round(stk / fin_liq * 100, 1) if fin_liq else 0,
-        "coin_ratio":        round(coin / fin_liq * 100, 1) if fin_liq else 0,
+        "debt_ratio":        round(total_d / net * 100, 2) if net else 0,
+        "liquid_ratio":      round(liquid_a / total_a * 100, 2) if total_a else 0,
+        "illiquid_ratio":    round(illiquid_a / total_a * 100, 2) if total_a else 0,
+        "fin_asset_ratio":   round(fin / total_a * 100, 2) if total_a else 0,
+        "real_asset_ratio":  round(real / total_a * 100, 2) if total_a else 0,
+        "cash_ratio":        round(cash / fin_liq * 100, 2) if fin_liq else 0,
+        "stock_ratio":       round(stk / fin_liq * 100, 2) if fin_liq else 0,
+        "coin_ratio":        round(coin / fin_liq * 100, 2) if fin_liq else 0,
     }
 
     # YTD 계산 (reference_month 기준 연도의 첫 레코드 대비)
@@ -188,12 +188,14 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
         same_yr = df_all[df_all[ref_col].dt.year == ref_val.year].sort_values(ref_col)
         if not same_yr.empty:
-            first      = same_yr.iloc[0]
-            net_start  = float(first["net_assets"])  if pd.notna(first.get("net_assets"))  else net
-            real_start = float(first["real_assets"]) if pd.notna(first.get("real_assets")) else real
+            first         = same_yr.iloc[0]
+            net_start     = float(first["net_assets"])     if pd.notna(first.get("net_assets"))     else net
+            net_start_usd = float(first["net_assets_usd"]) if pd.notna(first.get("net_assets_usd")) else (net_start / exr)
+            real_start    = float(first["real_assets"])    if pd.notna(first.get("real_assets"))    else real
+            net_usd       = round(net / exr, 0)
             r["net_assets_ytd_krw"] = net - net_start
-            r["net_assets_ytd_pct"] = round((net - net_start) / net_start * 100, 2) if net_start else 0
-            r["net_assets_ytd_usd"] = round((net - net_start) / exr, 0)
+            r["net_assets_ytd_usd"] = round(net_usd - net_start_usd, 0)
+            r["net_assets_ytd_pct"] = round((net_usd - net_start_usd) / net_start_usd * 100, 2) if net_start_usd else 0
             r["real_asset_ytd"]     = real - real_start
             r["real_asset_ytd_pct"] = round((real - real_start) / real_start * 100, 2) if real_start else 0
 
