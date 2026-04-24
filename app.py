@@ -125,7 +125,8 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     total_d   = fin_debt + real_debt
     net       = total_a - total_d
 
-    pension = (g("teachers_mutual") + g("jm_pension_total") + g("jm_pension_profit") +
+    pension = (g("teachers_mutual_principal") + g("teachers_mutual_bonus") +
+               g("jm_pension_total") + g("jm_pension_profit") +
                g("em_pension_total") + g("em_pension_profit") +
                g("jm_irp_total") + g("jm_irp_profit") +
                g("em_irp_total") + g("em_irp_profit"))
@@ -148,7 +149,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "liquid_net_assets": fin - fin_debt,
         "fin_net_assets":    fin - fin_debt,
         "total_pension":     pension,
-        "teachers_mutual_bonus": g("teachers_mutual") - g("teachers_mutual_principal"),
+        "teachers_mutual":       g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
         "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
         "liquid_ratio":      round(fin / total_a * 100, 1) if total_a else 0,
         "illiquid_ratio":    round(real / total_a * 100, 1) if total_a else 0,
@@ -383,22 +384,24 @@ if page == "📊 대시보드":
     with tab4:
         st.markdown('<div class="sec">최신 연금 현황</div>', unsafe_allow_html=True)
         c1, c2, c3, c4, c5 = st.columns(5)
-        pensions = [
-            ("교직원공제회", "teachers_mutual"),
-            ("준민연금저축", "jm_pension_total"),
-            ("은미연금저축", "em_pension_total"),
-            ("준민IRP",    "jm_irp_total"),
-            ("은미IRP",    "em_irp_total"),
+        def _pv(a, b=None): return float(latest.get(a) or 0) + (float(latest.get(b) or 0) if b else 0)
+        def _ps(a, b=None):
+            s = df[a].fillna(0) if a in df.columns else pd.Series(0, index=df.index)
+            return s + (df[b].fillna(0) if (b and b in df.columns) else pd.Series(0, index=df.index))
+        pension_defs = [
+            ("교직원공제회", "teachers_mutual",  None),
+            ("준민연금저축", "jm_pension_total", "jm_pension_profit"),
+            ("은미연금저축", "em_pension_total", "em_pension_profit"),
+            ("준민IRP",    "jm_irp_total",     "jm_irp_profit"),
+            ("은미IRP",    "em_irp_total",     "em_irp_profit"),
         ]
-        for col, (lbl, key) in zip([c1,c2,c3,c4,c5], pensions):
-            with col: card(lbl, fmt_krw(latest.get(key)), color="gold")
-
+        clrs_p = ["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"]
+        for col, (lbl, a, b) in zip([c1,c2,c3,c4,c5], pension_defs):
+            with col: card(lbl, fmt_krw(_pv(a, b)), color="gold")
         fig = go.Figure()
-        clrs = ["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"]
-        for i, (lbl, key) in enumerate(pensions):
-            if key in df.columns:
-                fig.add_trace(go.Scatter(x=df["date"], y=df[key], name=lbl,
-                    line=dict(color=clrs[i], width=2)))
+        for i, (lbl, a, b) in enumerate(pension_defs):
+            fig.add_trace(go.Scatter(x=df["date"], y=_ps(a, b), name=lbl,
+                line=dict(color=clrs_p[i], width=2)))
         fig.update_layout(**LAYOUT, title="연금 자산 추이")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -454,8 +457,8 @@ elif page == "📝 데이터 입력":
             ("real_debt",      "num", dv("real_debt")),
         ]),
         ("🎯 연금", [
-            ("teachers_mutual",           "num", dv("teachers_mutual")),
             ("teachers_mutual_principal", "num", dv("teachers_mutual_principal")),
+            ("teachers_mutual_bonus",     "num", dv("teachers_mutual_bonus")),
             ("jm_pension_total",          "num", dv("jm_pension_total")),
             ("jm_pension_profit",         "num", dv("jm_pension_profit")),
             ("em_pension_total",          "num", dv("em_pension_total")),
@@ -684,10 +687,14 @@ elif page == "📈 상세 분석":
     # 연금
     st.markdown('<div class="sec">연금 자산 추이</div>', unsafe_allow_html=True)
     fig = go.Figure()
-    for i,(lbl,k) in enumerate([("교직원공제회","teachers_mutual"),("준민연금저축","jm_pension_total"),
-                                  ("은미연금저축","em_pension_total"),("준민IRP","jm_irp_total"),("은미IRP","em_irp_total")]):
-        if k in df.columns:
-            fig.add_trace(go.Scatter(x=df["date"],y=df[k],name=lbl,
-                line=dict(color=["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"][i],width=2)))
+    for i, (lbl, vals) in enumerate([
+        ("교직원공제회", _tm),
+        ("준민연금저축", _jm_pen),
+        ("은미연금저축", _em_pen),
+        ("준민IRP",    _jm_irp),
+        ("은미IRP",    _em_irp),
+    ]):
+        fig.add_trace(go.Scatter(x=df["date"], y=vals, name=lbl,
+            line=dict(color=["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"][i], width=2)))
     fig.update_layout(**LAYOUT, title="연금 자산 추이")
     st.plotly_chart(fig, use_container_width=True)
