@@ -219,6 +219,11 @@ LAYOUT = dict(
     margin=dict(l=0, r=0, t=40, b=0), hovermode="x unified",
 )
 
+def _add_markers(fig):
+    fig.update_traces(mode="lines+markers", marker=dict(size=5),
+                      selector=dict(type="scatter"))
+    return fig
+
 # ── 사이드바 ──────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 💰 재무 대시보드")
@@ -316,7 +321,7 @@ if page == "📊 대시보드":
             line=dict(color="#fa4549",width=1,dash="dash")), secondary_y=True)
         fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
                           yaxis_title="원(₩)", yaxis2_title="달러($)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     with tab1b:
         fig = go.Figure()
@@ -327,7 +332,7 @@ if page == "📊 대시보드":
         fig.add_trace(go.Scatter(x=df["date"], y=df["fin_net_assets"], name="금융순자산",
             line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
         fig.update_layout(**LAYOUT, title="금융순자산 추이", yaxis_title="원(₩)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     with tab1c:
         fig = go.Figure()
@@ -338,7 +343,7 @@ if page == "📊 대시보드":
         fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_net_assets"], name="유동순자산",
             line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
         fig.update_layout(**LAYOUT, title="유동순자산 추이", yaxis_title="원(₩)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     with tab2:
         c1, c2 = st.columns(2)
@@ -349,7 +354,7 @@ if page == "📊 대시보드":
             fig.add_trace(go.Scatter(x=df["date"], y=df["real_assets"], name="실물자산",
                 line=dict(color="#bf8700",width=2)))
             fig.update_layout(**LAYOUT, title="금융 vs 실물 추이", yaxis_title="원(₩)")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
         with c2:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"], name="유동자산",
@@ -357,7 +362,7 @@ if page == "📊 대시보드":
             fig.add_trace(go.Scatter(x=df["date"], y=df["illiquid_assets"], name="비유동자산",
                 line=dict(color="#8c959f",width=2)))
             fig.update_layout(**LAYOUT, title="유동 vs 비유동 추이", yaxis_title="원(₩)")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
 
         def _c(col): return df[col].fillna(0) if col in df.columns else pd.Series(0, index=df.index, dtype=float)
         _r2  = _c("real_assets").where(_c("real_assets") > 0, _c("real_estate"))
@@ -389,7 +394,7 @@ if page == "📊 대시보드":
         for vals, name, color in traces2:
             fig.add_trace(go.Bar(x=df["date"], y=vals, name=name, marker_color=color))
         fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이 (원화)", yaxis_title="원(₩)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     with tab3:
         c1, c2 = st.columns(2)
@@ -398,12 +403,12 @@ if page == "📊 대시보드":
             fig.add_trace(go.Bar(x=df["date"], y=df["fin_debt"],   name="금융부채", marker_color="#f85149"))
             fig.add_trace(go.Bar(x=df["date"], y=df["real_debt"],  name="실물부채", marker_color="#da3633"))
             fig.update_layout(**LAYOUT, barmode="stack", title="부채 구성 추이")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
         with c2:
             fig = go.Figure(go.Scatter(x=df["date"], y=df["debt_ratio"], name="부채비율",
                 line=dict(color="#f85149",width=2), fill="tozeroy", fillcolor="rgba(248,81,73,0.08)"))
             fig.update_layout(**LAYOUT, title="부채 비율 추이 (%)", yaxis_title="%")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     with tab4:
         st.markdown('<div class="sec">최신 연금 현황</div>', unsafe_allow_html=True)
@@ -427,7 +432,7 @@ if page == "📊 대시보드":
             fig.add_trace(go.Scatter(x=df["date"], y=_ps(a, b), name=lbl,
                 line=dict(color=clrs_p[i], width=2)))
         fig.update_layout(**LAYOUT, title="연금 자산 추이")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════
 # 📝 데이터 입력
@@ -663,7 +668,7 @@ elif page == "📈 상세 분석":
     fig = go.Figure(go.Bar(x=dd["date"], y=dd["delta"],
         marker_color=["#2ea043" if v>=0 else "#f85149" for v in dd["delta"]]))
     fig.update_layout(**LAYOUT, title="월간 순자산 증감", yaxis_title="원")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     # 자산 비중
     st.markdown('<div class="sec">자산 비중 변화</div>', unsafe_allow_html=True)
@@ -706,7 +711,7 @@ elif page == "📈 상세 분석":
             line=dict(color=color, width=2), stackgroup="one", groupnorm="percent"))
     fig.update_layout(**LAYOUT, title="자산 비중 추이 (%)", yaxis_title="%")
     fig.update_yaxes(tickformat=".1f")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     # 연금
     st.markdown('<div class="sec">연금 자산 추이</div>', unsafe_allow_html=True)
@@ -721,4 +726,4 @@ elif page == "📈 상세 분석":
         fig.add_trace(go.Scatter(x=df["date"], y=vals, name=lbl,
             line=dict(color=["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"][i], width=2)))
     fig.update_layout(**LAYOUT, title="연금 자산 추이")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(_add_markers(fig), use_container_width=True)
