@@ -155,6 +155,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "stock_assets":      stk,
         "coin_assets":       coin,
         "financial_assets":  fin,
+        "fin_liq_assets":    fin,
         "real_assets":       real,
         "liquid_assets":     liquid_a,
         "illiquid_assets":   illiquid_a,
