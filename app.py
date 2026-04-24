@@ -115,7 +115,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     exr  = g("exchange_rate") or 1300
     
     # 1. 자산 항목별 합계
-    cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription")
+    cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription") + g("coin_cash")
     stk  = g("jm_stock_value") + g("em_stock_value")
     coin = g("coin_assets")
     real = g("real_estate")
@@ -127,10 +127,12 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
                g("jm_irp_principal") + g("jm_irp_profit") +
                g("em_irp_principal") + g("em_irp_profit"))
 
+    fin_liq_assets = cash + stk + coin
+
     # 3. 자산 분류 및 총계 계산
-    fin_assets = cash + stk + coin
-    liq_assets = fin_assets + real   # 유동자산 = 금융자산 + 부동산
-    ill_assets = pension             # 비유동자산 = 연금
+    fin_assets = fin_liq_assets + pension       # 금융자산 (현금+주식+코인 + 연금)
+    liq_assets = fin_liq_assets + real    # 유동자산 (금융자산+부동산)
+    ill_assets = pension              # 비유동자산 (연금)
     total_a    = liq_assets + ill_assets
 
     # 4. 부채 및 순자산
@@ -143,6 +145,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "cash_assets":       cash,
         "stock_assets":      stk,
         "coin_assets":       coin,
+        "fin_liq_assets":    fin_liq_assets,
         "financial_assets":  fin_assets,
         "real_assets":       real,
         "liquid_assets":     liq_assets,
@@ -162,25 +165,12 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "illiquid_ratio":    round(ill_assets / total_a * 100, 1) if total_a else 0,
         "fin_asset_ratio":   round(fin_assets / total_a * 100, 1) if total_a else 0,
         "real_asset_ratio":  round(real / total_a * 100, 1) if total_a else 0,
-        "cash_ratio":        round(cash / fin_assets * 100, 1) if fin_assets else 0,
-        "stock_ratio":       round(stk / fin_assets * 100, 1) if fin_assets else 0,
-        "coin_ratio":        round(coin / fin_assets * 100, 1) if fin_assets else 0,
+        "cash_ratio":        round(cash / fin_liq_assets * 100, 1) if fin_liq_assets else 0,
+        "stock_ratio":       round(stk / fin_liq_assets * 100, 1) if fin_liq_assets else 0,
+        "coin_ratio":        round(coin / fin_liq_assets * 100, 1) if fin_liq_assets else 0,
     }
 
     # YTD 계산
-    if df_all is not None and not df_all.empty:
-        ref_col = "reference_month" if "reference_month" in df_all.columns else "date"
-        ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
-        same_year = df_all[df_all[ref_col].dt.year == ref_val.year].sort_values(ref_col)
-        if not same_year.empty:
-            net_start = float(same_year.iloc[0]["net_assets"]) if pd.notna(same_year.iloc[0].get("net_assets")) else net
-            r["net_assets_ytd_krw"] = net - net_start
-            r["net_assets_ytd_pct"] = round((net - net_start) / net_start * 100, 2) if net_start else 0
-            r["net_assets_ytd_usd"] = round((net - net_start) / exr, 0)
-
-    return r
-
-    # YTD 계산 (reference_month 기준 연도의 첫 레코드 대비)
     if df_all is not None and not df_all.empty:
         ref_col = "reference_month" if "reference_month" in df_all.columns else "date"
         ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
