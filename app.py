@@ -676,8 +676,8 @@ elif page == "📈 상세 분석":
     for vals, name, color in traces:
         fig.add_trace(go.Scatter(x=df["date"], y=vals, name=name,
             line=dict(color=color, width=2), stackgroup="one", groupnorm="percent"))
-    fig.update_layout(**LAYOUT, title="자산 비중 추이 (%)", yaxis_title="%",
-                      yaxis=dict(tickformat=".1f", gridcolor="#d0d7de", linecolor="#d0d7de"))
+    fig.update_layout(**LAYOUT, title="자산 비중 추이 (%)", yaxis_title="%")
+    fig.update_yaxes(tickformat=".1f")
     st.plotly_chart(fig, use_container_width=True)
 
     # 연금
