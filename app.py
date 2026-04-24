@@ -131,7 +131,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
 
     # 3. 자산 분류 및 총계 계산
     fin_assets = fin_liq_assets + pension       # 금융자산 (현금+주식+코인 + 연금)
-    liq_assets = fin_liq_assets + real    # 유동자산 (금융자산+부동산)
+    liq_assets = fin_liq_assets + real    # 유동자산 (유동금융자산+부동산)
     ill_assets = pension              # 비유동자산 (연금)
     total_a    = liq_assets + ill_assets
 
@@ -158,7 +158,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "net_assets":        net,
         "net_assets_usd":    round(net / exr, 0),
         "liquid_net_assets": liq_assets - total_d,
-        "fin_net_assets":    fin_assets - fin_debt,
+        "fin_net_assets":    fin_assets - total_d,
         "teachers_mutual":   g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
         "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
         "liquid_ratio":      round(liq_assets / total_a * 100, 1) if total_a else 0,
