@@ -430,10 +430,10 @@ elif page == "📝 데이터 입력":
             ("em_subscription","num", dv("em_subscription")),
         ]),
         ("📈 주식", [
-            ("jm_stock_book",  "num", dv("jm_stock_book")),
             ("jm_stock_value", "num", dv("jm_stock_value")),
-            ("em_stock_book",  "num", dv("em_stock_book")),
+            ("jm_stock_book",  "num", dv("jm_stock_book")),
             ("em_stock_value", "num", dv("em_stock_value")),
+            ("em_stock_book",  "num", dv("em_stock_book")),
         ]),
         ("🪙 코인", [
             ("coin_total_buy", "num", dv("coin_total_buy")),
