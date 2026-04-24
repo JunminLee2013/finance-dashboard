@@ -115,7 +115,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     exr  = g("exchange_rate") or 1300
     cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription")
     stk  = g("jm_stock_value") + g("em_stock_value")
-    coin = g("coin_cash")
+    coin = g("coin_assets")
     fin  = cash + stk + coin
     real = g("real_estate")
     total_a = fin + real
@@ -148,6 +148,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "liquid_net_assets": fin - fin_debt,
         "fin_net_assets":    fin - fin_debt,
         "total_pension":     pension,
+        "teachers_mutual_bonus": g("teachers_mutual") - g("teachers_mutual_principal"),
         "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
         "liquid_ratio":      round(fin / total_a * 100, 1) if total_a else 0,
         "illiquid_ratio":    round(real / total_a * 100, 1) if total_a else 0,
@@ -437,6 +438,7 @@ elif page == "📝 데이터 입력":
         ]),
         ("🪙 코인", [
             ("coin_total_buy", "num", dv("coin_total_buy")),
+            ("coin_assets",    "num", dv("coin_assets")),
             ("coin_cash",      "num", dv("coin_cash")),
         ]),
         ("🏠 실물자산", [
@@ -454,7 +456,6 @@ elif page == "📝 데이터 입력":
         ("🎯 연금", [
             ("teachers_mutual",           "num", dv("teachers_mutual")),
             ("teachers_mutual_principal", "num", dv("teachers_mutual_principal")),
-            ("teachers_mutual_bonus",     "num", dv("teachers_mutual_bonus")),
             ("jm_pension_total",          "num", dv("jm_pension_total")),
             ("jm_pension_profit",         "num", dv("jm_pension_profit")),
             ("em_pension_total",          "num", dv("em_pension_total")),
@@ -472,7 +473,7 @@ elif page == "📝 데이터 입력":
         "em_cash":"은미 현금","em_subscription":"은미 주택청약",
         "jm_stock_book":"준민 주식 원화평가금액","jm_stock_value":"준민 주식 원화평가손익",
         "em_stock_book":"은미 주식 원화평가금액","em_stock_value":"은미 주식 원화평가손익",
-        "coin_total_buy":"코인 총매수","coin_cash":"코인 현재가치",
+        "coin_total_buy":"코인 총매수","coin_assets":"코인 총평가","coin_cash":"코인 현금",
         "real_estate":"부동산",
         "jm_fin_debt":"준민 금융부채","donggum_invest":"동금씨 투자금",
         "em_fin_debt":"은미 금융부채","card_debt":"카드값",
