@@ -109,47 +109,55 @@ def delete_row(row_id: int):
     st.cache_data.clear()
 
 # ── 파생 지표 계산 ────────────────────────────────────────────────
+# 실물자산 계산 상수 (부동산 갈아타지 않는 한 고정)
+_REAL_BUY_PRICE = 916_000_000            # 신규 부동산 취득가
+_REAL_EQUITY    = 916_000_000 - 630_000_000   # 투자 자본 = 286,000,000
+_REAL_BASE_DATE = date(2021, 11, 13)     # 부동산 기준일
+
 def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     g = lambda k: float(d.get(k) or 0)
 
     exr  = g("exchange_rate") or 1300
-    
-    # 1. 자산 항목별 합계
-    cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription") + g("coin_cash")
-    stk  = g("jm_stock_value") + g("em_stock_value")
+    cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription")
+    stk  = g("jm_stock_book") + g("em_stock_book")   # 원화평가금액(총액)
     coin = g("coin_assets")
+    fin  = cash + stk + coin   # financial_assets = 현금+주식+코인
     real = g("real_estate")
 
-    # 2. 연금 합계 (새 컬럼명 _principal 반영)
     pension = (g("teachers_mutual_principal") + g("teachers_mutual_bonus") +
-               g("jm_pension_principal") + g("jm_pension_profit") +
-               g("em_pension_principal") + g("em_pension_profit") +
-               g("jm_irp_principal") + g("jm_irp_profit") +
-               g("em_irp_principal") + g("em_irp_profit"))
+               g("jm_pension_total") + g("jm_pension_profit") +
+               g("em_pension_total") + g("em_pension_profit") +
+               g("jm_irp_total") + g("jm_irp_profit") +
+               g("em_irp_total") + g("em_irp_profit"))
 
-    fin_liq_assets = cash + stk + coin
+    liquid_a   = fin + real        # 유동자산: 현금+주식+코인+부동산
+    illiquid_a = pension            # 비유동자산: 연금
+    total_a    = liquid_a + illiquid_a
 
-    # 3. 자산 분류 및 총계 계산
-    fin_assets = fin_liq_assets + pension       # 금융자산 (현금+주식+코인 + 연금)
-    liq_assets = fin_liq_assets + real    # 유동자산 (유동금융자산+부동산)
-    ill_assets = pension              # 비유동자산 (연금)
-    total_a    = liq_assets + ill_assets
-
-    # 4. 부채 및 순자산
     fin_debt  = g("jm_fin_debt") + g("donggum_invest") + g("em_fin_debt") + g("card_debt")
     real_debt = g("real_debt")
     total_d   = fin_debt + real_debt
     net       = total_a - total_d
 
+    # 실물자산 수익률
+    real_roe = (real - _REAL_BUY_PRICE) / _REAL_EQUITY if _REAL_EQUITY else 0
+
+    ref_date = None
+    try:
+        ref_date = pd.to_datetime(d.get("reference_month") or d.get("date")).date()
+    except Exception:
+        pass
+    days_held = (ref_date - _REAL_BASE_DATE).days if ref_date and ref_date > _REAL_BASE_DATE else 0
+    real_cagr = ((1 + real_roe) ** (365 / days_held) - 1) if days_held > 0 and real_roe > -1 else 0
+
     r = {
         "cash_assets":       cash,
         "stock_assets":      stk,
         "coin_assets":       coin,
-        "fin_liq_assets":    fin_liq_assets,
-        "financial_assets":  fin_assets,
+        "financial_assets":  fin,
         "real_assets":       real,
-        "liquid_assets":     liq_assets,
-        "illiquid_assets":   ill_assets,
+        "liquid_assets":     liquid_a,
+        "illiquid_assets":   illiquid_a,
         "total_assets":      total_a,
         "total_assets_usd":  round(total_a / exr, 0),
         "fin_debt":          fin_debt,
@@ -157,61 +165,35 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "total_debt_usd":    round(total_d / exr, 0),
         "net_assets":        net,
         "net_assets_usd":    round(net / exr, 0),
-        "liquid_net_assets": liq_assets - total_d,
-        "fin_net_assets":    fin_assets - total_d,
+        "liquid_net_assets": liquid_a - total_d,
+        "fin_net_assets":    fin - fin_debt,
         "teachers_mutual":   g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
-        "debt_ratio":        round(total_d / net * 100, 1) if net else 0,
-        "liquid_ratio":      round(liq_assets / total_a * 100, 1) if total_a else 0,
-        "illiquid_ratio":    round(ill_assets / total_a * 100, 1) if total_a else 0,
-        "fin_asset_ratio":   round(fin_assets / total_a * 100, 1) if total_a else 0,
+        "real_asset_roe":    round(real_roe * 100, 2),
+        "real_asset_cagr":   round(real_cagr * 100, 2),
+        "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
+        "liquid_ratio":      round(liquid_a / total_a * 100, 1) if total_a else 0,
+        "illiquid_ratio":    round(illiquid_a / total_a * 100, 1) if total_a else 0,
+        "fin_asset_ratio":   round(fin / total_a * 100, 1) if total_a else 0,
         "real_asset_ratio":  round(real / total_a * 100, 1) if total_a else 0,
-        "cash_ratio":        round(cash / fin_liq_assets * 100, 1) if fin_liq_assets else 0,
-        "stock_ratio":       round(stk / fin_liq_assets * 100, 1) if fin_liq_assets else 0,
-        "coin_ratio":        round(coin / fin_liq_assets * 100, 1) if fin_liq_assets else 0,
+        "cash_ratio":        round(cash / fin * 100, 1) if fin else 0,
+        "stock_ratio":       round(stk / fin * 100, 1) if fin else 0,
+        "coin_ratio":        round(coin / fin * 100, 1) if fin else 0,
     }
 
-    # YTD 계산 (사용자 정의 로직 반영)
+    # YTD 계산 (reference_month 기준 연도의 첫 레코드 대비)
     if df_all is not None and not df_all.empty:
         ref_col = "reference_month" if "reference_month" in df_all.columns else "date"
-        curr_date = pd.to_datetime(d.get("reference_month") or d.get("date"))
-        
-        # 기준점 찾기: 1월이면 작년 1월, 그외엔 올해 1월
-        base_year = curr_date.year - 1 if curr_date.month == 1 else curr_date.year
-        base_month = 1
-        
-        # DB에서 기준 월 데이터 검색
-        mask = (df_all[ref_col].dt.year == base_year) & (df_all[ref_col].dt.month == base_month)
-        base_rows = df_all[mask].sort_values(ref_col)
-        
-        if not base_rows.empty:
-            b = base_rows.iloc[0] # 기준점 레코드
-            def bv(k): return float(b.get(k) or 0)
-
-            # 순자산 YTD
-            net_start = bv("net_assets") or net
+        ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
+        same_yr = df_all[df_all[ref_col].dt.year == ref_val.year].sort_values(ref_col)
+        if not same_yr.empty:
+            first      = same_yr.iloc[0]
+            net_start  = float(first["net_assets"])  if pd.notna(first.get("net_assets"))  else net
+            real_start = float(first["real_assets"]) if pd.notna(first.get("real_assets")) else real
             r["net_assets_ytd_krw"] = net - net_start
             r["net_assets_ytd_pct"] = round((net - net_start) / net_start * 100, 2) if net_start else 0
             r["net_assets_ytd_usd"] = round((net - net_start) / exr, 0)
-
-            # 금융순자산 YTD
-            f_net_start = bv("fin_net_assets") or (fin_assets - total_d)
-            r["fin_net_assets_ytd"] = (fin_assets - total_d) - f_net_start
-
-            # 실물자산 YTD 및 수익률
-            real_start = bv("real_assets") or bv("real_estate") or real
-            r["real_asset_ytd"] = real - real_start
+            r["real_asset_ytd"]     = real - real_start
             r["real_asset_ytd_pct"] = round((real - real_start) / real_start * 100, 2) if real_start else 0
-            
-            # 실물자산 ROE (단순 YTD 기준 수익률을 ROE로 가정)
-            r["real_asset_roe"] = r["real_asset_ytd_pct"]
-
-            # 실물자산 CAGR (기준점으로부터 현재까지의 기간 기준)
-            months_diff = (curr_date.year - base_year) * 12 + (curr_date.month - base_month)
-            if months_diff > 0 and real_start > 0:
-                years = months_diff / 12.0
-                r["real_asset_cagr"] = round(((real / real_start) ** (1/years) - 1) * 100, 2)
-            else:
-                r["real_asset_cagr"] = 0
 
     return r
 
