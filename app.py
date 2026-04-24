@@ -119,7 +119,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
 
     exr  = g("exchange_rate") or 1300
     cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription") + g("coin_cash")
-    stk  = g("jm_stock_book") + g("em_stock_book")   # 원화평가금액(총액)
+    stk  = g("jm_stock_value") + g("em_stock_value")   # 원화평가금액(총액)
     coin = g("coin_assets")
     fin_liq  = cash + stk + coin   # financial_assets = 현금+주식+코인
     real = g("real_estate")
