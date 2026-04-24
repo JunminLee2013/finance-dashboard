@@ -148,7 +148,6 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "net_assets_usd":    round(net / exr, 0),
         "liquid_net_assets": fin - fin_debt,
         "fin_net_assets":    fin - fin_debt,
-        "total_pension":     pension,
         "teachers_mutual":       g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
         "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
         "liquid_ratio":      round(fin / total_a * 100, 1) if total_a else 0,
@@ -223,6 +222,18 @@ def _add_markers(fig):
     fig.update_traces(mode="lines+markers", marker=dict(size=5),
                       selector=dict(type="scatter"))
     return fig
+
+@st.cache_data(ttl=3600)
+def fetch_exchange_rate():
+    try:
+        import urllib.request, json as _json
+        with urllib.request.urlopen("https://open.er-api.com/v6/latest/USD", timeout=5) as r:
+            data = _json.loads(r.read())
+            if data.get("result") == "success":
+                return round(data["rates"]["KRW"])
+    except Exception:
+        pass
+    return None
 
 # ── 사이드바 ──────────────────────────────────────────────────────
 with st.sidebar:
@@ -451,11 +462,6 @@ elif page == "📝 데이터 입력":
         return float(v)
 
     GROUPS = [
-        ("📅 기본 정보", [
-            ("reference_month", "ref_month", None),
-            ("date",            "date",      None),
-            ("exchange_rate",   "num",       dv("exchange_rate", 1300)),
-        ]),
         ("💵 현금성 자산", [
             ("jm_cash",        "num", dv("jm_cash")),
             ("jm_subscription","num", dv("jm_subscription")),
@@ -518,25 +524,34 @@ elif page == "📝 데이터 입력":
         "em_irp_total":"은미IRP 납입","em_irp_profit":"└ 수익금",
     }
 
+    auto_exr = fetch_exchange_rate()
+
     with st.form("entry_form"):
         inp = {}
+
+        # ─── 기본 정보 ───────────────────────────────────────────
+        st.markdown("### 📅 기본 정보")
+        _last_ref = last.get("reference_month")
+        _def_ref  = pd.to_datetime(_last_ref) if _last_ref and pd.notna(_last_ref) else pd.to_datetime(date.today())
+        _years    = list(range(2020, date.today().year + 2))
+        ci1, ci2, ci3 = st.columns(3)
+        sel_year  = ci1.selectbox("기준 연도", _years, index=_years.index(_def_ref.year))
+        sel_month = ci2.selectbox("기준 월", range(1, 13), index=_def_ref.month - 1,
+                                  format_func=lambda m: f"{m}월")
+        inp["reference_month"] = f"{sel_year}-{sel_month:02d}-01"
+        inp["date"]            = date.today().strftime("%Y-%m-%d")
+        _exr_label   = "환율 (₩/$) 🔄자동" if auto_exr else "환율 (₩/$)"
+        _exr_default = float(auto_exr) if auto_exr else dv("exchange_rate", 1300)
+        inp["exchange_rate"] = ci3.number_input(_exr_label, value=_exr_default, step=1.0, format="%g")
+
+        # ─── 나머지 항목 ─────────────────────────────────────────
         for group_name, fields in GROUPS:
             st.markdown(f"### {group_name}")
             ncols = min(len(fields), 4)
-            cols = st.columns(ncols)
-            for i, (key, ftype, default) in enumerate(fields):
+            cols  = st.columns(ncols)
+            for i, (key, _, default) in enumerate(fields):
                 with cols[i % ncols]:
-                    lbl = LABELS.get(key, key)
-                    if ftype == "ref_month":
-                        _last_ref = last.get("reference_month")
-                        _def_ref = pd.to_datetime(_last_ref).date().replace(day=1) if _last_ref and pd.notna(_last_ref) else date.today().replace(day=1)
-                        v = st.date_input(lbl, value=_def_ref)
-                        inp["reference_month"] = v.replace(day=1).strftime("%Y-%m-%d")
-                    elif ftype == "date":
-                        v = st.date_input(lbl, value=date.today().replace(day=1))
-                        inp["date"] = v.strftime("%Y-%m-%d")
-                    else:
-                        inp[key] = st.number_input(lbl, value=default, step=10000.0, format="%g")
+                    inp[key] = st.number_input(LABELS.get(key, key), value=default, step=10000.0, format="%g")
 
         # 미리보기
         st.markdown("---")
@@ -554,7 +569,7 @@ elif page == "📝 데이터 입력":
             full = {**inp, **derived}
             try:
                 save_row(full)
-                st.success(f"✅ {inp.get('date')} 데이터가 저장됐습니다!")
+                st.success(f"✅ {inp['reference_month'][:7]} 데이터가 저장됐습니다!")
                 st.balloons()
             except Exception as e:
                 st.error(f"저장 실패: {e}")
