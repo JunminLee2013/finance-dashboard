@@ -45,13 +45,13 @@ CREATE TABLE IF NOT EXISTS finance_monthly (
     teachers_mutual         NUMERIC DEFAULT 0,   -- 교직원공제회
     teachers_mutual_principal NUMERIC DEFAULT 0, -- 교직원공제회 원금
     teachers_mutual_bonus   NUMERIC DEFAULT 0,   -- 교직원공제회 부가금
-    jm_pension_total        NUMERIC DEFAULT 0,   -- 준민연금저축 납입누계
+    jm_pension_principal    NUMERIC DEFAULT 0,   -- 준민연금저축 원금
     jm_pension_profit       NUMERIC DEFAULT 0,   -- 준민연금저축 수익금
-    em_pension_total        NUMERIC DEFAULT 0,   -- 은미연금저축 납입누계
+    em_pension_principal    NUMERIC DEFAULT 0,   -- 은미연금저축 원금
     em_pension_profit       NUMERIC DEFAULT 0,   -- 은미연금저축 수익금
-    jm_irp_total            NUMERIC DEFAULT 0,   -- 준민IRP 납입누계
+    jm_irp_principal        NUMERIC DEFAULT 0,   -- 준민IRP 원금
     jm_irp_profit           NUMERIC DEFAULT 0,   -- 준민IRP 수익금
-    em_irp_total            NUMERIC DEFAULT 0,   -- 은미IRP 납입누계
+    em_irp_principal        NUMERIC DEFAULT 0,   -- 은미IRP 원금
     em_irp_profit           NUMERIC DEFAULT 0,   -- 은미IRP 수익금
 
     -- ── 파생 지표 (자동 계산, 저장) ──────────────────────────────

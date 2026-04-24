@@ -113,32 +113,40 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     g = lambda k: float(d.get(k) or 0)
 
     exr  = g("exchange_rate") or 1300
+    
+    # 1. 자산 항목별 합계
     cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription")
     stk  = g("jm_stock_value") + g("em_stock_value")
     coin = g("coin_assets")
-    fin  = cash + stk + coin
     real = g("real_estate")
-    total_a = fin + real
 
+    # 2. 연금 합계 (새 컬럼명 _principal 반영)
+    pension = (g("teachers_mutual_principal") + g("teachers_mutual_bonus") +
+               g("jm_pension_principal") + g("jm_pension_profit") +
+               g("em_pension_principal") + g("em_pension_profit") +
+               g("jm_irp_principal") + g("jm_irp_profit") +
+               g("em_irp_principal") + g("em_irp_profit"))
+
+    # 3. 자산 분류 및 총계 계산
+    fin_assets = cash + stk + coin
+    liq_assets = fin_assets + real   # 유동자산 = 금융자산 + 부동산
+    ill_assets = pension             # 비유동자산 = 연금
+    total_a    = liq_assets + ill_assets
+
+    # 4. 부채 및 순자산
     fin_debt  = g("jm_fin_debt") + g("donggum_invest") + g("em_fin_debt") + g("card_debt")
     real_debt = g("real_debt")
     total_d   = fin_debt + real_debt
     net       = total_a - total_d
 
-    pension = (g("teachers_mutual_principal") + g("teachers_mutual_bonus") +
-               g("jm_pension_total") + g("jm_pension_profit") +
-               g("em_pension_total") + g("em_pension_profit") +
-               g("jm_irp_total") + g("jm_irp_profit") +
-               g("em_irp_total") + g("em_irp_profit"))
-
     r = {
         "cash_assets":       cash,
         "stock_assets":      stk,
         "coin_assets":       coin,
-        "financial_assets":  fin,
+        "financial_assets":  fin_assets,
         "real_assets":       real,
-        "liquid_assets":     fin,
-        "illiquid_assets":   real,
+        "liquid_assets":     liq_assets,
+        "illiquid_assets":   ill_assets,
         "total_assets":      total_a,
         "total_assets_usd":  round(total_a / exr, 0),
         "fin_debt":          fin_debt,
@@ -146,18 +154,31 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "total_debt_usd":    round(total_d / exr, 0),
         "net_assets":        net,
         "net_assets_usd":    round(net / exr, 0),
-        "liquid_net_assets": fin - fin_debt,
-        "fin_net_assets":    fin - fin_debt,
-        "teachers_mutual":       g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
+        "liquid_net_assets": liq_assets - total_d,
+        "fin_net_assets":    fin_assets - fin_debt,
+        "teachers_mutual":   g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
         "debt_ratio":        round(total_d / total_a * 100, 1) if total_a else 0,
-        "liquid_ratio":      round(fin / total_a * 100, 1) if total_a else 0,
-        "illiquid_ratio":    round(real / total_a * 100, 1) if total_a else 0,
-        "fin_asset_ratio":   round(fin / total_a * 100, 1) if total_a else 0,
+        "liquid_ratio":      round(liq_assets / total_a * 100, 1) if total_a else 0,
+        "illiquid_ratio":    round(ill_assets / total_a * 100, 1) if total_a else 0,
+        "fin_asset_ratio":   round(fin_assets / total_a * 100, 1) if total_a else 0,
         "real_asset_ratio":  round(real / total_a * 100, 1) if total_a else 0,
-        "cash_ratio":        round(cash / fin * 100, 1) if fin else 0,
-        "stock_ratio":       round(stk / fin * 100, 1) if fin else 0,
-        "coin_ratio":        round(coin / fin * 100, 1) if fin else 0,
+        "cash_ratio":        round(cash / fin_assets * 100, 1) if fin_assets else 0,
+        "stock_ratio":       round(stk / fin_assets * 100, 1) if fin_assets else 0,
+        "coin_ratio":        round(coin / fin_assets * 100, 1) if fin_assets else 0,
     }
+
+    # YTD 계산
+    if df_all is not None and not df_all.empty:
+        ref_col = "reference_month" if "reference_month" in df_all.columns else "date"
+        ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
+        same_year = df_all[df_all[ref_col].dt.year == ref_val.year].sort_values(ref_col)
+        if not same_year.empty:
+            net_start = float(same_year.iloc[0]["net_assets"]) if pd.notna(same_year.iloc[0].get("net_assets")) else net
+            r["net_assets_ytd_krw"] = net - net_start
+            r["net_assets_ytd_pct"] = round((net - net_start) / net_start * 100, 2) if net_start else 0
+            r["net_assets_ytd_usd"] = round((net - net_start) / exr, 0)
+
+    return r
 
     # YTD 계산 (reference_month 기준 연도의 첫 레코드 대비)
     if df_all is not None and not df_all.empty:
@@ -379,10 +400,10 @@ if page == "📊 대시보드":
         _r2  = _c("real_assets").where(_c("real_assets") > 0, _c("real_estate"))
         _ca2 = _c("cash_assets"); _st2 = _c("stock_assets"); _co2 = _c("coin_assets")
         _tm2 = _c("teachers_mutual")
-        _jp2 = _c("jm_pension_total") + _c("jm_pension_profit")
-        _ep2 = _c("em_pension_total") + _c("em_pension_profit")
-        _ji2 = _c("jm_irp_total")     + _c("jm_irp_profit")
-        _ei2 = _c("em_irp_total")     + _c("em_irp_profit")
+        _jp2 = _c("jm_pension_principal") + _c("jm_pension_profit")
+        _ep2 = _c("em_pension_principal") + _c("em_pension_profit")
+        _ji2 = _c("jm_irp_principal")      + _c("jm_irp_profit")
+        _ei2 = _c("em_irp_principal")      + _c("em_irp_profit")
         _liq2 = _ca2 + _st2 + _co2
         _ill2 = _tm2 + _jp2 + _ep2 + _ji2 + _ei2
         view2 = st.radio("보기 방식", ["요약 (3가지)", "세부 (9가지)"], horizontal=True,
@@ -430,10 +451,10 @@ if page == "📊 대시보드":
             return s + (df[b].fillna(0) if (b and b in df.columns) else pd.Series(0, index=df.index))
         pension_defs = [
             ("교직원공제회", "teachers_mutual",  None),
-            ("준민연금저축", "jm_pension_total", "jm_pension_profit"),
-            ("은미연금저축", "em_pension_total", "em_pension_profit"),
-            ("준민IRP",    "jm_irp_total",     "jm_irp_profit"),
-            ("은미IRP",    "em_irp_total",     "em_irp_profit"),
+            ("준민연금저축", "jm_pension_principal", "jm_pension_profit"),
+            ("은미연금저축", "em_pension_principal", "em_pension_profit"),
+            ("준민IRP",    "jm_irp_principal",     "jm_irp_profit"),
+            ("은미IRP",    "em_irp_principal",     "em_irp_profit"),
         ]
         clrs_p = ["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"]
         for col, (lbl, a, b) in zip([c1,c2,c3,c4,c5], pension_defs):
@@ -494,13 +515,13 @@ elif page == "📝 데이터 입력":
         ("🎯 연금", [
             ("teachers_mutual_principal", "num", dv("teachers_mutual_principal")),
             ("teachers_mutual_bonus",     "num", dv("teachers_mutual_bonus")),
-            ("jm_pension_total",          "num", dv("jm_pension_total")),
+            ("jm_pension_principal",      "num", dv("jm_pension_principal")),
             ("jm_pension_profit",         "num", dv("jm_pension_profit")),
-            ("em_pension_total",          "num", dv("em_pension_total")),
+            ("em_pension_principal",      "num", dv("em_pension_principal")),
             ("em_pension_profit",         "num", dv("em_pension_profit")),
-            ("jm_irp_total",              "num", dv("jm_irp_total")),
+            ("jm_irp_principal",          "num", dv("jm_irp_principal")),
             ("jm_irp_profit",             "num", dv("jm_irp_profit")),
-            ("em_irp_total",              "num", dv("em_irp_total")),
+            ("em_irp_principal",          "num", dv("em_irp_principal")),
             ("em_irp_profit",             "num", dv("em_irp_profit")),
         ]),
     ]
@@ -518,10 +539,10 @@ elif page == "📝 데이터 입력":
         "real_debt":"실물부채 (주담대)",
         "teachers_mutual":"교직원공제회","teachers_mutual_principal":"└ 원금",
         "teachers_mutual_bonus":"└ 부가금",
-        "jm_pension_total":"준민연금저축 납입","jm_pension_profit":"└ 수익금",
-        "em_pension_total":"은미연금저축 납입","em_pension_profit":"└ 수익금",
-        "jm_irp_total":"준민IRP 납입","jm_irp_profit":"└ 수익금",
-        "em_irp_total":"은미IRP 납입","em_irp_profit":"└ 수익금",
+        "jm_pension_principal":"준민연금저축 원금","jm_pension_profit":"└ 수익금",
+        "em_pension_principal":"은미연금저축 원금","em_pension_profit":"└ 수익금",
+        "jm_irp_principal":"준민IRP 원금","jm_irp_profit":"└ 수익금",
+        "em_irp_principal":"은미IRP 원금","em_irp_profit":"└ 수익금",
     }
 
     auto_exr = fetch_exchange_rate()
@@ -613,10 +634,10 @@ elif page == "📋 데이터 관리":
             "em_fin_debt": "은미금융부채", "card_debt": "카드값", "real_debt": "실물부채",
             "teachers_mutual": "교직원공제회", "teachers_mutual_principal": "공제회원금",
             "teachers_mutual_bonus": "공제회부가금",
-            "jm_pension_total": "준민연금납입", "jm_pension_profit": "준민연금수익",
-            "em_pension_total": "은미연금납입", "em_pension_profit": "은미연금수익",
-            "jm_irp_total": "준민IRP납입", "jm_irp_profit": "준민IRP수익",
-            "em_irp_total": "은미IRP납입", "em_irp_profit": "은미IRP수익",
+            "jm_pension_principal": "준민연금원금", "jm_pension_profit": "준민연금수익",
+            "em_pension_principal": "은미연금원금", "em_pension_profit": "은미연금수익",
+            "jm_irp_principal": "준민IRP원금", "jm_irp_profit": "준민IRP수익",
+            "em_irp_principal": "은미IRP원금", "em_irp_profit": "은미IRP수익",
         }
         existing = [c for c in RAW_COLS if c in df.columns]
         raw = df[existing].copy()
@@ -693,10 +714,10 @@ elif page == "📈 상세 분석":
     _stk     = _col("stock_assets")
     _coin    = _col("coin_assets")
     _tm      = _col("teachers_mutual")
-    _jm_pen  = _col("jm_pension_total") + _col("jm_pension_profit")
-    _em_pen  = _col("em_pension_total") + _col("em_pension_profit")
-    _jm_irp  = _col("jm_irp_total") + _col("jm_irp_profit")
-    _em_irp  = _col("em_irp_total") + _col("em_irp_profit")
+    _jm_pen  = _col("jm_pension_principal") + _col("jm_pension_profit")
+    _em_pen  = _col("em_pension_principal") + _col("em_pension_profit")
+    _jm_irp  = _col("jm_irp_principal")     + _col("jm_irp_profit")
+    _em_irp  = _col("em_irp_principal")     + _col("em_irp_profit")
     # 유동금융 = cash+stk+coin 직접 합산 (financial_assets는 연금 포함될 수 있어 제외)
     _liq_fin_sum  = _cash + _stk + _coin
     _illiquid_fin = _tm + _jm_pen + _em_pen + _jm_irp + _em_irp

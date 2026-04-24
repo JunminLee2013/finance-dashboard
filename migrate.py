@@ -112,7 +112,7 @@ COL_MAP = {
     "금융순자산YTD":            "fin_net_assets_ytd",
 
     # 현금/주식/코인 합산
-    "유동금융자산":             "cash_assets",
+    "유동금융자산":             "financial_assets",  # 수정: 유동금융자산(현금+주식+코인)
     "현금성자산":               "cash_assets",
     "현금성자산_비중":           "cash_ratio",
     "주식":                   "stock_assets",
@@ -152,13 +152,13 @@ COL_MAP = {
     "교직원공제회":             "teachers_mutual",
     "교직원공제회_원금":         "teachers_mutual_principal",
     "교직원공제회_부가금":        "teachers_mutual_bonus",
-    "준민연금저축_납입누계":      "jm_pension_total",
+    "준민연금저축_납입누계":      "jm_pension_principal",
     "준민연금저축_수익금":        "jm_pension_profit",
-    "은미연금저축_납입누계":      "em_pension_total",
+    "은미연금저축_납입누계":      "em_pension_principal",
     "은미연금저축_수익금":        "em_pension_profit",
-    "준민IRP_납입누계":          "jm_irp_total",
+    "준민IRP_납입누계":          "jm_irp_principal",
     "준민IRP_수익금":            "jm_irp_profit",
-    "은미IRP_납입누계":          "em_irp_total",
+    "은미IRP_납입누계":          "em_irp_principal",
     "은미IRP_수익금":            "em_irp_profit",
 }
 
