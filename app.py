@@ -359,12 +359,36 @@ if page == "📊 대시보드":
             fig.update_layout(**LAYOUT, title="유동 vs 비유동 추이", yaxis_title="원(₩)")
             st.plotly_chart(fig, use_container_width=True)
 
+        def _c(col): return df[col].fillna(0) if col in df.columns else pd.Series(0, index=df.index, dtype=float)
+        _r2  = _c("real_assets").where(_c("real_assets") > 0, _c("real_estate"))
+        _ca2 = _c("cash_assets"); _st2 = _c("stock_assets"); _co2 = _c("coin_assets")
+        _tm2 = _c("teachers_mutual")
+        _jp2 = _c("jm_pension_total") + _c("jm_pension_profit")
+        _ep2 = _c("em_pension_total") + _c("em_pension_profit")
+        _ji2 = _c("jm_irp_total")     + _c("jm_irp_profit")
+        _ei2 = _c("em_irp_total")     + _c("em_irp_profit")
+        _liq2 = _ca2 + _st2 + _co2
+        _ill2 = _tm2 + _jp2 + _ep2 + _ji2 + _ei2
+        view2 = st.radio("보기 방식", ["요약 (3가지)", "세부 (9가지)"], horizontal=True,
+                         label_visibility="collapsed", key="dash_asset_view")
+        if view2 == "요약 (3가지)":
+            traces2 = [
+                (_r2,   "실물",               "#8c959f"),
+                (_liq2, "유동금융자산",        "#0969da"),
+                (_ill2, "비유동금융자산(연금)", "#bf8700"),
+            ]
+        else:
+            traces2 = [
+                (_r2,  "실물",         "#8c959f"), (_co2, "코인",         "#bf8700"),
+                (_st2, "주식",         "#0969da"), (_ca2, "현금성",       "#2da44e"),
+                (_tm2, "교직원공제회",  "#8250df"), (_jp2, "준민연금저축",  "#bc8cff"),
+                (_ep2, "은미연금저축",  "#d2a8ff"), (_ji2, "준민IRP",      "#cf4945"),
+                (_ei2, "은미IRP",      "#fa8a87"),
+            ]
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=df["date"], y=df["cash_assets"],  name="현금성", marker_color="#2da44e"))
-        fig.add_trace(go.Bar(x=df["date"], y=df["stock_assets"], name="주식",   marker_color="#0969da"))
-        fig.add_trace(go.Bar(x=df["date"], y=df["coin_assets"],  name="코인",   marker_color="#bf8700"))
-        fig.add_trace(go.Bar(x=df["date"], y=df["real_assets"],  name="실물",   marker_color="#8c959f"))
-        fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이")
+        for vals, name, color in traces2:
+            fig.add_trace(go.Bar(x=df["date"], y=vals, name=name, marker_color=color))
+        fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이 (원화)", yaxis_title="원(₩)")
         st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
