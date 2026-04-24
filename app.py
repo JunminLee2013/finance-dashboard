@@ -160,7 +160,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "liquid_net_assets": liq_assets - total_d,
         "fin_net_assets":    fin_assets - total_d,
         "teachers_mutual":   g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
-        "debt_ratio":        round(total_d / net_assets * 100, 1) if net_assets else 0,
+        "debt_ratio":        round(total_d / net * 100, 1) if net else 0,
         "liquid_ratio":      round(liq_assets / total_a * 100, 1) if total_a else 0,
         "illiquid_ratio":    round(ill_assets / total_a * 100, 1) if total_a else 0,
         "fin_asset_ratio":   round(fin_assets / total_a * 100, 1) if total_a else 0,
