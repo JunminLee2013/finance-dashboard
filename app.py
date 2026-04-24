@@ -116,7 +116,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     
     # 1. 자산 항목별 합계
     cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription") + g("coin_cash")
-    stk  = g("jm_stock_book") + g("em_stock_book")
+    stk  = g("jm_stock_value") + g("em_stock_value")
     coin = g("coin_assets")
     real = g("real_estate")
 
