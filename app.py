@@ -170,16 +170,48 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "coin_ratio":        round(coin / fin_liq_assets * 100, 1) if fin_liq_assets else 0,
     }
 
-    # YTD 계산
+    # YTD 계산 (사용자 정의 로직 반영)
     if df_all is not None and not df_all.empty:
         ref_col = "reference_month" if "reference_month" in df_all.columns else "date"
-        ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
-        same_year = df_all[df_all[ref_col].dt.year == ref_val.year].sort_values(ref_col)
-        if not same_year.empty:
-            net_start = float(same_year.iloc[0]["net_assets"]) if pd.notna(same_year.iloc[0].get("net_assets")) else net
+        curr_date = pd.to_datetime(d.get("reference_month") or d.get("date"))
+        
+        # 기준점 찾기: 1월이면 작년 1월, 그외엔 올해 1월
+        base_year = curr_date.year - 1 if curr_date.month == 1 else curr_date.year
+        base_month = 1
+        
+        # DB에서 기준 월 데이터 검색
+        mask = (df_all[ref_col].dt.year == base_year) & (df_all[ref_col].dt.month == base_month)
+        base_rows = df_all[mask].sort_values(ref_col)
+        
+        if not base_rows.empty:
+            b = base_rows.iloc[0] # 기준점 레코드
+            def bv(k): return float(b.get(k) or 0)
+
+            # 순자산 YTD
+            net_start = bv("net_assets") or net
             r["net_assets_ytd_krw"] = net - net_start
             r["net_assets_ytd_pct"] = round((net - net_start) / net_start * 100, 2) if net_start else 0
             r["net_assets_ytd_usd"] = round((net - net_start) / exr, 0)
+
+            # 금융순자산 YTD
+            f_net_start = bv("fin_net_assets") or (fin_assets - total_d)
+            r["fin_net_assets_ytd"] = (fin_assets - total_d) - f_net_start
+
+            # 실물자산 YTD 및 수익률
+            real_start = bv("real_assets") or bv("real_estate") or real
+            r["real_asset_ytd"] = real - real_start
+            r["real_asset_ytd_pct"] = round((real - real_start) / real_start * 100, 2) if real_start else 0
+            
+            # 실물자산 ROE (단순 YTD 기준 수익률을 ROE로 가정)
+            r["real_asset_roe"] = r["real_asset_ytd_pct"]
+
+            # 실물자산 CAGR (기준점으로부터 현재까지의 기간 기준)
+            months_diff = (curr_date.year - base_year) * 12 + (curr_date.month - base_month)
+            if months_diff > 0 and real_start > 0:
+                years = months_diff / 12.0
+                r["real_asset_cagr"] = round(((real / real_start) ** (1/years) - 1) * 100, 2)
+            else:
+                r["real_asset_cagr"] = 0
 
     return r
 
