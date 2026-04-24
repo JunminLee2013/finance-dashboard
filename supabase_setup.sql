@@ -20,11 +20,11 @@ CREATE TABLE IF NOT EXISTS finance_monthly (
     em_subscription         NUMERIC DEFAULT 0,   -- 은미 주택청약
 
     -- 원본 입력 항목: 주식
-    jm_stock_book           NUMERIC DEFAULT 0,   -- 준민 주식 (장부가/납입)
+    -- 주식
     jm_stock_value          NUMERIC DEFAULT 0,   -- 준민 주식 평가액
-    em_stock_book           NUMERIC DEFAULT 0,   -- 은미 주식 (장부가/납입)
+    jm_stock_pnl            NUMERIC DEFAULT 0,   -- 준민 주식 평가손익
     em_stock_value          NUMERIC DEFAULT 0,   -- 은미 주식 평가액
-
+    em_stock_pnl            NUMERIC DEFAULT 0,   -- 은미 주식 평가손익
     -- 원본 입력 항목: 코인
     coin_total_buy          NUMERIC DEFAULT 0,   -- 코인-총매수
     coin_cash               NUMERIC DEFAULT 0,   -- 코인-현금 (평가액)

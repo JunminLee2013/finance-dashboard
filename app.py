@@ -116,7 +116,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     
     # 1. 자산 항목별 합계
     cash = g("jm_cash") + g("jm_subscription") + g("em_cash") + g("em_subscription") + g("coin_cash")
-    stk  = g("jm_stock_value") + g("em_stock_value")
+    stk  = g("jm_stock_book") + g("em_stock_book")
     coin = g("coin_assets")
     real = g("real_estate")
 
@@ -480,10 +480,10 @@ elif page == "📝 데이터 입력":
             ("em_subscription","num", dv("em_subscription")),
         ]),
         ("📈 주식", [
-            ("jm_stock_book",  "num", dv("jm_stock_book")),
             ("jm_stock_value", "num", dv("jm_stock_value")),
-            ("em_stock_book",  "num", dv("em_stock_book")),
+            ("jm_stock_pnl",   "num", dv("jm_stock_pnl")),
             ("em_stock_value", "num", dv("em_stock_value")),
+            ("em_stock_pnl",   "num", dv("em_stock_pnl")),
         ]),
         ("🪙 코인", [
             ("coin_total_buy", "num", dv("coin_total_buy")),
@@ -520,8 +520,8 @@ elif page == "📝 데이터 입력":
         "reference_month":"기준월","date":"기록일","exchange_rate":"환율 (₩/$)",
         "jm_cash":"준민 현금","jm_subscription":"준민 주택청약",
         "em_cash":"은미 현금","em_subscription":"은미 주택청약",
-        "jm_stock_book":"준민 주식 원화평가금액","jm_stock_value":"준민 주식 원화평가손익",
-        "em_stock_book":"은미 주식 원화평가금액","em_stock_value":"은미 주식 원화평가손익",
+        "jm_stock_value":"준민 주식 원화평가금액","jm_stock_pnl":"준민 주식 원화평가손익",
+        "em_stock_value":"은미 주식 원화평가금액","em_stock_pnl":"은미 주식 원화평가손익",
         "coin_total_buy":"코인 총매수","coin_assets":"코인 총평가","coin_cash":"코인 현금",
         "real_estate":"부동산",
         "jm_fin_debt":"준민 금융부채","donggum_invest":"동금씨 투자금",

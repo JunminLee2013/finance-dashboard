@@ -120,15 +120,15 @@ COL_MAP = {
     "코인":                   "coin_assets",
     "코인_비중":               "coin_ratio",
 
-    # 원본 입력값
+    # 기초 입력 항목 (준민/은미)
     "준민_현금":               "jm_cash",
     "준민_주택청약":            "jm_subscription",
     "은미_현금":               "em_cash",
     "은미_주택청약":            "em_subscription",
-    "준민_주식":               "jm_stock_book",
-    "준민_주식_평가액":          "jm_stock_value",
-    "은미_주식":               "em_stock_book",
-    "은미_주식_평가액":          "em_stock_value",
+    "준민_주식":               "jm_stock_value",
+    "준민_주식_평가액":          "jm_stock_pnl",
+    "은미_주식":               "em_stock_value",
+    "은미_주식_평가액":          "em_stock_pnl",
     "코인_총매수":              "coin_total_buy",
     "코인_현금":               "coin_cash",
     "부동산":                  "real_estate",
