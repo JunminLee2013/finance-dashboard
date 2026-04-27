@@ -393,6 +393,8 @@ if page == "📊 대시보드":
     # 3열 토글 차트
     ch1, ch2, ch3 = st.columns(3)
     _ref_col = "reference_month" if "reference_month" in df.columns and df["reference_month"].notna().any() else "date"
+    # 1월 데이터는 전년도 그룹으로 (YTD 계산 기준과 동일)
+    _disp_yr = df[_ref_col].dt.year.where(df[_ref_col].dt.month != 1, df[_ref_col].dt.year - 1)
     _year_palette = ["#0969da", "#1a7f37", "#bf8700", "#8250df", "#cf222e", "#57606a"]
 
     def _ytd_chart(col, title, ret_krw, ret_usd, on_krw, on_usd, key):
@@ -402,10 +404,10 @@ if page == "📊 대시보드":
             krw_col = on_krw if mode == "연초 자산 대비" else ret_krw
             usd_col = on_usd if mode == "연초 자산 대비" else ret_usd
             fig = go.Figure()
-            years = sorted(df[_ref_col].dt.year.dropna().unique())
+            years = sorted(_disp_yr.dropna().unique().astype(int))
             for i, yr in enumerate(years):
                 clr = _year_palette[i % len(_year_palette)]
-                mask = df[_ref_col].dt.year == yr
+                mask = _disp_yr == yr
                 yr_df = df[mask]
                 if krw_col in df.columns and yr_df[krw_col].notna().any():
                     fig.add_trace(go.Scatter(
