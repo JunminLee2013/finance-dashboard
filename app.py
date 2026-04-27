@@ -182,22 +182,38 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "coin_ratio":        round(coin / fin_liq * 100, 2) if fin_liq else 0,
     }
 
-    # YTD 계산 (reference_month 기준 연도의 첫 레코드 대비)
+    # YTD 계산: 1월이면 전년도 첫 레코드, 나머지는 당해연도 첫 레코드 기준
     if df_all is not None and not df_all.empty:
-        ref_col = "reference_month" if "reference_month" in df_all.columns else "date"
-        ref_val = pd.to_datetime(d.get("reference_month") or d.get("date"))
-        same_yr = df_all[df_all[ref_col].dt.year == ref_val.year].sort_values(ref_col)
-        if not same_yr.empty:
-            first         = same_yr.iloc[0]
-            net_start     = float(first["net_assets"])     if pd.notna(first.get("net_assets"))     else net
-            net_start_usd = float(first["net_assets_usd"]) if pd.notna(first.get("net_assets_usd")) else (net_start / exr)
-            real_start    = float(first["real_assets"])    if pd.notna(first.get("real_assets"))    else real
+        ref_col  = "reference_month" if "reference_month" in df_all.columns else "date"
+        ref_val  = pd.to_datetime(d.get("reference_month") or d.get("date"))
+        base_yr  = ref_val.year - 1 if ref_val.month == 1 else ref_val.year
+        base_df  = df_all[df_all[ref_col].dt.year == base_yr].sort_values(ref_col)
+        if not base_df.empty:
+            first         = base_df.iloc[0]
+            net_start     = float(first["net_assets"])       if pd.notna(first.get("net_assets"))       else net
+            net_start_usd = float(first["net_assets_usd"])   if pd.notna(first.get("net_assets_usd"))   else (net_start / exr)
+            tot_start     = float(first["total_assets"])     if pd.notna(first.get("total_assets"))     else total_a
+            tot_start_usd = float(first["total_assets_usd"]) if pd.notna(first.get("total_assets_usd")) else (tot_start / exr)
+            real_start    = float(first["real_assets"])      if pd.notna(first.get("real_assets"))      else real
             net_usd       = round(net / exr, 0)
-            r["net_assets_ytd_krw"] = net - net_start
-            r["net_assets_ytd_usd"] = round(net_usd - net_start_usd, 0)
-            r["net_assets_ytd_pct"] = round((net_usd - net_start_usd) / net_start_usd * 100, 2) if net_start_usd else 0
-            r["real_asset_ytd"]     = real - real_start
-            r["real_asset_ytd_pct"] = round((real - real_start) / real_start * 100, 2) if real_start else 0
+            tot_usd       = round(total_a / exr, 0)
+            # 절대값 YTD
+            r["net_assets_krw_ytd"]        = net - net_start
+            r["net_assets_usd_ytd"]        = round(net_usd - net_start_usd, 0)
+            r["total_assets_krw_ytd"]      = total_a - tot_start
+            r["total_assets_usd_ytd"]      = round(tot_usd - tot_start_usd, 0)
+            # 연초 자산 대비 자산 증가율
+            r["total_assets_krw_ytd_pct"]  = round((total_a - tot_start) / tot_start * 100, 2)         if tot_start     else 0
+            r["total_assets_usd_ytd_pct"]  = round((tot_usd - tot_start_usd) / tot_start_usd * 100, 2) if tot_start_usd else 0
+            # 연초 자산 대비 순자산 증가율
+            r["net_on_assets_krw_ytd_pct"] = round((net - net_start) / tot_start * 100, 2)             if tot_start     else 0
+            r["net_on_assets_usd_ytd_pct"] = round((net_usd - net_start_usd) / tot_start_usd * 100, 2) if tot_start_usd else 0
+            # 연초 순자산 대비 순자산 증가율 (순수 수익률)
+            r["net_return_krw_ytd_pct"]    = round((net - net_start) / net_start * 100, 2)             if net_start     else 0
+            r["net_return_usd_ytd_pct"]    = round((net_usd - net_start_usd) / net_start_usd * 100, 2) if net_start_usd else 0
+            # 실물자산 YTD
+            r["real_asset_ytd"]            = real - real_start
+            r["real_asset_ytd_pct"]        = round((real - real_start) / real_start * 100, 2) if real_start else 0
 
     return r
 
@@ -311,17 +327,48 @@ if page == "📊 대시보드":
         card("총 부채", fmt_krw(latest["total_debt"]),
              sub=f"부채비율 {fmt_pct(latest['debt_ratio'])}", delta=d, color="red")
     with c4:
-        ref_col = "reference_month" if "reference_month" in df.columns else "date"
-        latest_ref = latest.get(ref_col)
-        if pd.notna(latest_ref):
-            _same_year = df[df[ref_col].dt.year == pd.to_datetime(latest_ref).year].sort_values(ref_col)
-            _net_start = float(_same_year.iloc[0]["net_assets"]) if not _same_year.empty else None
-            _ytd_krw = latest["net_assets"] - _net_start if _net_start is not None else None
-            _ytd_pct = _ytd_krw / _net_start * 100 if _net_start else None
-        else:
-            _ytd_krw, _ytd_pct = None, None
-        card("순자산 YTD", fmt_pct(_ytd_pct) if _ytd_pct is not None else "—",
-             sub=fmt_krw(_ytd_krw) if _ytd_krw is not None else "—", color="gold")
+        card("환율", f"₩{latest.get('exchange_rate', 0):,.0f}",
+             sub="원/달러", color="gray")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # YTD 성과
+    st.markdown('<div class="sec">YTD 성과</div>', unsafe_allow_html=True)
+    def _ytd(col):
+        v = latest.get(col)
+        return v if v is not None and not (isinstance(v, float) and math.isnan(v)) else None
+    def _col(c): return df[c] if c in df.columns else None
+
+    cy1, cy2, cy3, cy4, cy5, cy6 = st.columns(6)
+    with cy1: card("자산증가율 ₩", fmt_pct(_ytd("total_assets_krw_ytd_pct")),
+                   sub=fmt_krw(_ytd("total_assets_krw_ytd")), color="blue")
+    with cy2: card("자산증가율 $", fmt_pct(_ytd("total_assets_usd_ytd_pct")),
+                   sub=fmt_usd(_ytd("total_assets_usd_ytd")), color="blue")
+    with cy3: card("순자산/자산 ₩", fmt_pct(_ytd("net_on_assets_krw_ytd_pct")),
+                   sub=fmt_krw(_ytd("net_assets_krw_ytd")), color="green")
+    with cy4: card("순자산/자산 $", fmt_pct(_ytd("net_on_assets_usd_ytd_pct")),
+                   sub=fmt_usd(_ytd("net_assets_usd_ytd")), color="green")
+    with cy5: card("순자산수익률 ₩", fmt_pct(_ytd("net_return_krw_ytd_pct")),
+                   sub=fmt_krw(_ytd("net_assets_krw_ytd")), color="gold")
+    with cy6: card("순자산수익률 $", fmt_pct(_ytd("net_return_usd_ytd_pct")),
+                   sub=fmt_usd(_ytd("net_assets_usd_ytd")), color="gold")
+
+    _ytd_cols = {
+        "total_assets_krw_ytd_pct":  ("자산증가율(₩)",    "#0969da", "solid"),
+        "total_assets_usd_ytd_pct":  ("자산증가율($)",    "#0969da", "dash"),
+        "net_on_assets_krw_ytd_pct": ("순자산/자산(₩)",  "#1a7f37", "solid"),
+        "net_on_assets_usd_ytd_pct": ("순자산/자산($)",  "#1a7f37", "dash"),
+        "net_return_krw_ytd_pct":    ("순자산수익률(₩)", "#bf8700", "solid"),
+        "net_return_usd_ytd_pct":    ("순자산수익률($)", "#bf8700", "dash"),
+    }
+    fig_ytd = go.Figure()
+    for col, (name, color, dash) in _ytd_cols.items():
+        s = _col(col)
+        if s is not None:
+            fig_ytd.add_trace(go.Scatter(x=df["date"], y=s, name=name,
+                line=dict(color=color, width=2 if dash == "solid" else 1.5, dash=dash)))
+    fig_ytd.update_layout(**LAYOUT, title="YTD 성과 추이 (%)", yaxis_title="%")
+    st.plotly_chart(_add_markers(fig_ytd), use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -636,7 +683,7 @@ elif page == "📋 데이터 관리":
             "em_cash": "은미현금", "em_subscription": "은미청약",
             "jm_stock_value": "준민주식(장부)", "jm_stock_pnl": "준민주식(평가)",
             "em_stock_value": "은미주식(장부)", "em_stock_pnl": "은미주식(평가)",
-            "coin_total_buy": "코인총매수", "coin_cash": "코인평가",
+            "coin_total_buy": "코인총매수", "coin_assets": "코인총평가", "coin_cash": "코인현금",
             "real_estate": "부동산", "exchange_rate": "환율",
             "jm_fin_debt": "준민금융부채", "donggum_invest": "동금씨투자금",
             "em_fin_debt": "은미금융부채", "card_debt": "카드값", "real_debt": "실물부채",
@@ -696,13 +743,15 @@ elif page == "📈 상세 분석":
         y0 = ydf.iloc[0]
         c1,c2,c3,c4 = st.columns(4)
         def yd(k): return float(latest.get(k) or 0) - float(y0.get(k) or 0)
-        _ytd_krw = yd("net_assets")
-        _ytd_pct = _ytd_krw / float(y0.get("net_assets") or 1) * 100 if y0.get("net_assets") else 0
-        with c1: card("순자산 증감", fmt_krw(_ytd_krw),
-                      sub=fmt_pct(_ytd_pct), delta=_ytd_krw, color="green")
-        with c2: card("금융자산 증감", fmt_krw(yd("financial_assets")), delta=yd("financial_assets"), color="blue")
+        _net_ytd_krw = latest.get("net_assets_krw_ytd") or yd("net_assets")
+        _ret_krw_pct = latest.get("net_return_krw_ytd_pct") or 0
+        with c1: card("순자산 증감(₩)", fmt_krw(_net_ytd_krw),
+                      sub=fmt_pct(latest.get("net_return_usd_ytd_pct")), delta=_net_ytd_krw, color="green")
+        with c2: card("자산 증감(₩)", fmt_krw(latest.get("total_assets_krw_ytd") or yd("total_assets")),
+                      sub=fmt_pct(latest.get("total_assets_krw_ytd_pct")), delta=yd("total_assets"), color="blue")
         with c3: card("부채 증감", fmt_krw(yd("total_debt")), delta=yd("total_debt"), color="red")
-        with c4: card("YTD 수익률", fmt_pct(_ytd_pct), color="gold")
+        with c4: card("순자산수익률(₩)", fmt_pct(_ret_krw_pct),
+                      sub=f"$ {fmt_pct(latest.get('net_return_usd_ytd_pct'))}", color="gold")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
