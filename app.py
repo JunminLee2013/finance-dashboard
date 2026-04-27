@@ -6,10 +6,10 @@ from supabase import create_client, Client
 from datetime import datetime, date
 import math
 
-def check_password():
+def require_auth():
     if st.session_state.get("authenticated"):
         return
-    st.markdown("# 💰 재무 대시보드")
+    st.markdown("### 🔒 이 페이지는 로그인이 필요합니다")
     pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
     if st.button("로그인", use_container_width=True):
         if pw == st.secrets["APP_PASSWORD"]:
@@ -18,9 +18,6 @@ def check_password():
         else:
             st.error("비밀번호가 틀렸습니다")
     st.stop()
-
-
-check_password()
 
 
 # ── 페이지 설정 ──────────────────────────────────────────────────
@@ -336,32 +333,10 @@ if page == "📊 대시보드":
         st.stop()
 
     latest = df.iloc[-1]
-    prev   = df.iloc[-2] if len(df) > 1 else None
 
     st.markdown(f"<div style='color:#57606a;font-size:13px;margin-bottom:20px'>"
                 f"📅 최신: <b style='color:#24292f'>{latest['date'].strftime('%Y년 %m월')}</b>"
                 f" &nbsp;|&nbsp; 총 {len(df)}개월 기록</div>", unsafe_allow_html=True)
-
-    # 핵심 지표
-    st.markdown('<div class="sec">핵심 지표</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        d = latest["net_assets"] - prev["net_assets"] if prev is not None else None
-        card("순자산", fmt_krw(latest["net_assets"]),
-             sub=f"USD {fmt_usd(latest['net_assets_usd'])}", delta=d, color="green")
-    with c2:
-        d = latest["total_assets"] - prev["total_assets"] if prev is not None else None
-        card("총 자산", fmt_krw(latest["total_assets"]),
-             sub=f"USD {fmt_usd(latest['total_assets_usd'])}", delta=d, color="blue")
-    with c3:
-        d = latest["total_debt"] - prev["total_debt"] if prev is not None else None
-        card("총 부채", fmt_krw(latest["total_debt"]),
-             sub=f"부채비율 {fmt_pct(latest['debt_ratio'])}", delta=d, color="red")
-    with c4:
-        card("환율", f"₩{latest.get('exchange_rate', 0):,.0f}",
-             sub="원/달러", color="gray")
-
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # YTD 성과
     st.markdown('<div class="sec">YTD 성과</div>', unsafe_allow_html=True)
@@ -435,161 +410,11 @@ if page == "📊 대시보드":
                "liq_net_on_liq_krw_ytd_pct",  "liq_net_on_liq_usd_ytd_pct",
                key="ytd_liq")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 자산 구성
-    st.markdown('<div class="sec">자산 구성</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4, c5 = st.columns(5)
-    items = [
-        ("금융자산",   "financial_assets", "fin_asset_ratio",  "blue"),
-        ("실물자산",   "real_assets",      "real_asset_ratio", "gray"),
-        ("현금성 자산", "cash_assets",      "cash_ratio",       "green"),
-        ("주식",      "stock_assets",     "stock_ratio",      "blue"),
-        ("코인",      "coin_assets",      "coin_ratio",       "gold"),
-    ]
-    for col, (lbl, vk, rk, clr) in zip([c1,c2,c3,c4,c5], items):
-        with col:
-            card(lbl, fmt_krw(latest.get(vk)),
-                 sub=f"비중 {fmt_pct(latest.get(rk))}", color=clr)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 차트
-    tab1, tab1b, tab1c, tab2, tab3, tab4 = st.tabs(["📈 순자산 추이", "💹 금융순자산 추이", "💧 유동순자산 추이", "🏦 자산 구성", "💳 부채 현황", "🎯 연금"])
-
-    with tab1:
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets"], name="순자산(KRW)",
-            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"), secondary_y=False)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets"], name="총자산(KRW)",
-            line=dict(color="#0969da",width=1.5,dash="dot")), secondary_y=False)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채(KRW)",
-            line=dict(color="#cf222e",width=1.5,dash="dot")), secondary_y=False)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets_usd"], name="순자산(USD)",
-            line=dict(color="#2da44e",width=2,dash="dash")), secondary_y=True)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets_usd"], name="총자산(USD)",
-            line=dict(color="#388bfd",width=1,dash="dash")), secondary_y=True)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt_usd"], name="총부채(USD)",
-            line=dict(color="#fa4549",width=1,dash="dash")), secondary_y=True)
-        fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
-                          yaxis_title="원(₩)", yaxis2_title="달러($)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
-
-    with tab1b:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df["date"], y=df["financial_assets"], name="금융자산",
-            line=dict(color="#0969da",width=2)))
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채",
-            line=dict(color="#cf222e",width=2,dash="dot")))
-        fig.add_trace(go.Scatter(x=df["date"], y=df["fin_net_assets"], name="금융순자산",
-            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
-        fig.update_layout(**LAYOUT, title="금융순자산 추이", yaxis_title="원(₩)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
-
-    with tab1c:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"], name="유동자산",
-            line=dict(color="#0969da",width=2)))
-        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"], name="총부채",
-            line=dict(color="#cf222e",width=2,dash="dot")))
-        fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_net_assets"], name="유동순자산",
-            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
-        fig.update_layout(**LAYOUT, title="유동순자산 추이", yaxis_title="원(₩)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
-
-    with tab2:
-        c1, c2 = st.columns(2)
-        with c1:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df["date"], y=df["financial_assets"], name="금융자산",
-                line=dict(color="#0969da",width=2)))
-            fig.add_trace(go.Scatter(x=df["date"], y=df["real_assets"], name="실물자산",
-                line=dict(color="#bf8700",width=2)))
-            fig.update_layout(**LAYOUT, title="금융 vs 실물 추이", yaxis_title="원(₩)")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
-        with c2:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"], name="유동자산",
-                line=dict(color="#0969da",width=2)))
-            fig.add_trace(go.Scatter(x=df["date"], y=df["illiquid_assets"], name="비유동자산",
-                line=dict(color="#8c959f",width=2)))
-            fig.update_layout(**LAYOUT, title="유동 vs 비유동 추이", yaxis_title="원(₩)")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
-
-        def _c(col): return df[col].fillna(0) if col in df.columns else pd.Series(0, index=df.index, dtype=float)
-        _r2  = _c("real_assets").where(_c("real_assets") > 0, _c("real_estate"))
-        _ca2 = _c("cash_assets"); _st2 = _c("stock_assets"); _co2 = _c("coin_assets")
-        _tm2 = _c("teachers_mutual")
-        _jp2 = _c("jm_pension_principal") + _c("jm_pension_profit")
-        _ep2 = _c("em_pension_principal") + _c("em_pension_profit")
-        _ji2 = _c("jm_irp_principal")      + _c("jm_irp_profit")
-        _ei2 = _c("em_irp_principal")      + _c("em_irp_profit")
-        _liq2 = _ca2 + _st2 + _co2
-        _ill2 = _tm2 + _jp2 + _ep2 + _ji2 + _ei2
-        view2 = st.radio("보기 방식", ["요약 (3가지)", "세부 (9가지)"], horizontal=True,
-                         label_visibility="collapsed", key="dash_asset_view")
-        if view2 == "요약 (3가지)":
-            traces2 = [
-                (_r2,   "실물",               "#8c959f"),
-                (_liq2, "유동금융자산",        "#0969da"),
-                (_ill2, "비유동금융자산(연금)", "#bf8700"),
-            ]
-        else:
-            traces2 = [
-                (_r2,  "실물",         "#8c959f"), (_co2, "코인",         "#bf8700"),
-                (_st2, "주식",         "#0969da"), (_ca2, "현금성",       "#2da44e"),
-                (_tm2, "교직원공제회",  "#8250df"), (_jp2, "준민연금저축",  "#bc8cff"),
-                (_ep2, "은미연금저축",  "#d2a8ff"), (_ji2, "준민IRP",      "#cf4945"),
-                (_ei2, "은미IRP",      "#fa8a87"),
-            ]
-        fig = go.Figure()
-        for vals, name, color in traces2:
-            fig.add_trace(go.Bar(x=df["date"], y=vals, name=name, marker_color=color))
-        fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이 (원화)", yaxis_title="원(₩)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
-
-    with tab3:
-        c1, c2 = st.columns(2)
-        with c1:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=df["date"], y=df["fin_debt"],   name="금융부채", marker_color="#f85149"))
-            fig.add_trace(go.Bar(x=df["date"], y=df["real_debt"],  name="실물부채", marker_color="#da3633"))
-            fig.update_layout(**LAYOUT, barmode="stack", title="부채 구성 추이")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
-        with c2:
-            fig = go.Figure(go.Scatter(x=df["date"], y=df["debt_ratio"], name="부채비율",
-                line=dict(color="#f85149",width=2), fill="tozeroy", fillcolor="rgba(248,81,73,0.08)"))
-            fig.update_layout(**LAYOUT, title="부채 비율 추이 (%)", yaxis_title="%")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
-
-    with tab4:
-        st.markdown('<div class="sec">최신 연금 현황</div>', unsafe_allow_html=True)
-        c1, c2, c3, c4, c5 = st.columns(5)
-        def _pv(a, b=None): return float(latest.get(a) or 0) + (float(latest.get(b) or 0) if b else 0)
-        def _ps(a, b=None):
-            s = df[a].fillna(0) if a in df.columns else pd.Series(0, index=df.index)
-            return s + (df[b].fillna(0) if (b and b in df.columns) else pd.Series(0, index=df.index))
-        pension_defs = [
-            ("교직원공제회", "teachers_mutual",  None),
-            ("준민연금저축", "jm_pension_principal", "jm_pension_profit"),
-            ("은미연금저축", "em_pension_principal", "em_pension_profit"),
-            ("준민IRP",    "jm_irp_principal",     "jm_irp_profit"),
-            ("은미IRP",    "em_irp_principal",     "em_irp_profit"),
-        ]
-        clrs_p = ["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"]
-        for col, (lbl, a, b) in zip([c1,c2,c3,c4,c5], pension_defs):
-            with col: card(lbl, fmt_krw(_pv(a, b)), color="gold")
-        fig = go.Figure()
-        for i, (lbl, a, b) in enumerate(pension_defs):
-            fig.add_trace(go.Scatter(x=df["date"], y=_ps(a, b), name=lbl,
-                line=dict(color=clrs_p[i], width=2)))
-        fig.update_layout(**LAYOUT, title="연금 자산 추이")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
-
 # ══════════════════════════════════════════════════════════════════
 # 📝 데이터 입력
 # ══════════════════════════════════════════════════════════════════
 elif page == "📝 데이터 입력":
+    require_auth()
     st.markdown("# 월별 데이터 입력")
     st.markdown("<div style='color:#57606a;font-size:13px;margin-bottom:24px'>"
                 "매월 말 기준 데이터를 입력하세요. 파생 지표는 자동 계산됩니다.</div>",
@@ -719,6 +544,7 @@ elif page == "📝 데이터 입력":
 # 📋 데이터 관리
 # ══════════════════════════════════════════════════════════════════
 elif page == "📋 데이터 관리":
+    require_auth()
     st.markdown("# 데이터 관리")
     if df.empty:
         st.info("저장된 데이터가 없습니다."); st.stop()
@@ -794,12 +620,167 @@ elif page == "📋 데이터 관리":
 # 📈 상세 분석
 # ══════════════════════════════════════════════════════════════════
 elif page == "📈 상세 분석":
+    require_auth()
     st.markdown("# 상세 분석")
     if df.empty or len(df) < 2:
         st.info("최소 2개월 이상의 데이터가 필요합니다."); st.stop()
 
     latest = df.iloc[-1]
+    prev   = df.iloc[-2] if len(df) > 1 else None
     _ref_col = "reference_month" if "reference_month" in df.columns and df["reference_month"].notna().any() else "date"
+
+    # 핵심 지표
+    st.markdown('<div class="sec">핵심 지표</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        d = latest["net_assets"] - prev["net_assets"] if prev is not None else None
+        card("순자산", fmt_krw(latest["net_assets"]),
+             sub=f"USD {fmt_usd(latest['net_assets_usd'])}", delta=d, color="green")
+    with c2:
+        d = latest["total_assets"] - prev["total_assets"] if prev is not None else None
+        card("총 자산", fmt_krw(latest["total_assets"]),
+             sub=f"USD {fmt_usd(latest['total_assets_usd'])}", delta=d, color="blue")
+    with c3:
+        d = latest["total_debt"] - prev["total_debt"] if prev is not None else None
+        card("총 부채", fmt_krw(latest["total_debt"]),
+             sub=f"부채비율 {fmt_pct(latest['debt_ratio'])}", delta=d, color="red")
+    with c4:
+        card("환율", f"₩{latest.get('exchange_rate', 0):,.0f}", sub="원/달러", color="gray")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 자산 구성
+    st.markdown('<div class="sec">자산 구성</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    for col, (lbl, vk, rk, clr) in zip([c1,c2,c3,c4,c5], [
+        ("금융자산",   "financial_assets", "fin_asset_ratio",  "blue"),
+        ("실물자산",   "real_assets",      "real_asset_ratio", "gray"),
+        ("현금성 자산", "cash_assets",      "cash_ratio",       "green"),
+        ("주식",      "stock_assets",     "stock_ratio",      "blue"),
+        ("코인",      "coin_assets",      "coin_ratio",       "gold"),
+    ]):
+        with col:
+            card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_pct(latest.get(rk))}", color=clr)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 차트 탭
+    tab1, tab1b, tab1c, tab2, tab3, tab4 = st.tabs(["📈 순자산 추이", "💹 금융순자산 추이", "💧 유동순자산 추이", "🏦 자산 구성", "💳 부채 현황", "🎯 연금"])
+    with tab1:
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets"],    name="순자산(KRW)",
+            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets"],  name="총자산(KRW)",
+            line=dict(color="#0969da",width=1.5,dash="dot")), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"],    name="총부채(KRW)",
+            line=dict(color="#cf222e",width=1.5,dash="dot")), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["net_assets_usd"],   name="순자산(USD)",
+            line=dict(color="#2da44e",width=2,dash="dash")), secondary_y=True)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_assets_usd"], name="총자산(USD)",
+            line=dict(color="#388bfd",width=1,dash="dash")), secondary_y=True)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt_usd"],   name="총부채(USD)",
+            line=dict(color="#fa4549",width=1,dash="dash")), secondary_y=True)
+        fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
+                          yaxis_title="원(₩)", yaxis2_title="달러($)")
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
+    with tab1b:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df["date"], y=df["financial_assets"], name="금융자산",
+            line=dict(color="#0969da",width=2)))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"],       name="총부채",
+            line=dict(color="#cf222e",width=2,dash="dot")))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["fin_net_assets"],   name="금융순자산",
+            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
+        fig.update_layout(**LAYOUT, title="금융순자산 추이", yaxis_title="원(₩)")
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
+    with tab1c:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"],     name="유동자산",
+            line=dict(color="#0969da",width=2)))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt"],        name="총부채",
+            line=dict(color="#cf222e",width=2,dash="dot")))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_net_assets"], name="유동순자산",
+            line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
+        fig.update_layout(**LAYOUT, title="유동순자산 추이", yaxis_title="원(₩)")
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
+    with tab2:
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df["date"], y=df["financial_assets"], name="금융자산",
+                line=dict(color="#0969da",width=2)))
+            fig.add_trace(go.Scatter(x=df["date"], y=df["real_assets"],      name="실물자산",
+                line=dict(color="#bf8700",width=2)))
+            fig.update_layout(**LAYOUT, title="금융 vs 실물 추이", yaxis_title="원(₩)")
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
+        with c2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"],   name="유동자산",
+                line=dict(color="#0969da",width=2)))
+            fig.add_trace(go.Scatter(x=df["date"], y=df["illiquid_assets"], name="비유동자산",
+                line=dict(color="#8c959f",width=2)))
+            fig.update_layout(**LAYOUT, title="유동 vs 비유동 추이", yaxis_title="원(₩)")
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
+        def _c(col): return df[col].fillna(0) if col in df.columns else pd.Series(0, index=df.index, dtype=float)
+        _r2  = _c("real_assets").where(_c("real_assets") > 0, _c("real_estate"))
+        _ca2 = _c("cash_assets"); _st2 = _c("stock_assets"); _co2 = _c("coin_assets")
+        _tm2 = _c("teachers_mutual")
+        _jp2 = _c("jm_pension_principal") + _c("jm_pension_profit")
+        _ep2 = _c("em_pension_principal") + _c("em_pension_profit")
+        _ji2 = _c("jm_irp_principal")     + _c("jm_irp_profit")
+        _ei2 = _c("em_irp_principal")     + _c("em_irp_profit")
+        _liq2 = _ca2 + _st2 + _co2
+        _ill2 = _tm2 + _jp2 + _ep2 + _ji2 + _ei2
+        view2 = st.radio("보기 방식", ["요약 (3가지)", "세부 (9가지)"], horizontal=True,
+                         label_visibility="collapsed", key="anal_asset_view")
+        traces2 = ([(_r2,"실물","#8c959f"),(_liq2,"유동금융자산","#0969da"),(_ill2,"비유동금융자산(연금)","#bf8700")]
+                   if view2 == "요약 (3가지)" else
+                   [(_r2,"실물","#8c959f"),(_co2,"코인","#bf8700"),(_st2,"주식","#0969da"),
+                    (_ca2,"현금성","#2da44e"),(_tm2,"교직원공제회","#8250df"),(_jp2,"준민연금저축","#bc8cff"),
+                    (_ep2,"은미연금저축","#d2a8ff"),(_ji2,"준민IRP","#cf4945"),(_ei2,"은미IRP","#fa8a87")])
+        fig = go.Figure()
+        for vals, name, color in traces2:
+            fig.add_trace(go.Bar(x=df["date"], y=vals, name=name, marker_color=color))
+        fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이 (원화)", yaxis_title="원(₩)")
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
+    with tab3:
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=df["date"], y=df["fin_debt"],  name="금융부채", marker_color="#f85149"))
+            fig.add_trace(go.Bar(x=df["date"], y=df["real_debt"], name="실물부채", marker_color="#da3633"))
+            fig.update_layout(**LAYOUT, barmode="stack", title="부채 구성 추이")
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
+        with c2:
+            fig = go.Figure(go.Scatter(x=df["date"], y=df["debt_ratio"], name="부채비율",
+                line=dict(color="#f85149",width=2), fill="tozeroy", fillcolor="rgba(248,81,73,0.08)"))
+            fig.update_layout(**LAYOUT, title="부채 비율 추이 (%)", yaxis_title="%")
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
+    with tab4:
+        st.markdown('<div class="sec">최신 연금 현황</div>', unsafe_allow_html=True)
+        c1, c2, c3, c4, c5 = st.columns(5)
+        def _pv(a, b=None): return float(latest.get(a) or 0) + (float(latest.get(b) or 0) if b else 0)
+        def _ps(a, b=None):
+            s = df[a].fillna(0) if a in df.columns else pd.Series(0, index=df.index)
+            return s + (df[b].fillna(0) if (b and b in df.columns) else pd.Series(0, index=df.index))
+        pension_defs = [
+            ("교직원공제회", "teachers_mutual",      None),
+            ("준민연금저축", "jm_pension_principal", "jm_pension_profit"),
+            ("은미연금저축", "em_pension_principal", "em_pension_profit"),
+            ("준민IRP",    "jm_irp_principal",      "jm_irp_profit"),
+            ("은미IRP",    "em_irp_principal",      "em_irp_profit"),
+        ]
+        clrs_p = ["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"]
+        for col, (lbl, a, b) in zip([c1,c2,c3,c4,c5], pension_defs):
+            with col: card(lbl, fmt_krw(_pv(a, b)), color="gold")
+        fig = go.Figure()
+        for i, (lbl, a, b) in enumerate(pension_defs):
+            fig.add_trace(go.Scatter(x=df["date"], y=_ps(a, b), name=lbl,
+                line=dict(color=clrs_p[i], width=2)))
+        fig.update_layout(**LAYOUT, title="연금 자산 추이")
+        st.plotly_chart(_add_markers(fig), use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
     year = pd.to_datetime(latest[_ref_col]).year
     ydf  = df[df[_ref_col].dt.year == year].sort_values(_ref_col)
 
