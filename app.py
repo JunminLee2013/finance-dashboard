@@ -165,10 +165,12 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
         "fin_debt":          fin_debt,
         "total_debt":        total_d,
         "total_debt_usd":    round(total_d / exr, 0),
-        "net_assets":        net,
-        "net_assets_usd":    round(net / exr, 0),
-        "liquid_net_assets": liquid_a - total_d,
-        "fin_net_assets":    fin - total_d,
+        "net_assets":             net,
+        "net_assets_usd":         round(net / exr, 0),
+        "liquid_net_assets":      liquid_a - total_d,
+        "liquid_net_assets_usd":  round((liquid_a - total_d) / exr, 0),
+        "fin_net_assets":         fin - total_d,
+        "fin_net_assets_usd":     round((fin - total_d) / exr, 0),
         "teachers_mutual":   g("teachers_mutual_principal") + g("teachers_mutual_bonus"),
         "real_asset_roe":    round(real_roe * 100, 2),
         "real_asset_cagr":   round(real_cagr * 100, 2),
@@ -195,23 +197,52 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
             tot_start     = float(first["total_assets"])     if pd.notna(first.get("total_assets"))     else total_a
             tot_start_usd = float(first["total_assets_usd"]) if pd.notna(first.get("total_assets_usd")) else (tot_start / exr)
             real_start    = float(first["real_assets"])      if pd.notna(first.get("real_assets"))      else real
-            net_usd       = round(net / exr, 0)
-            tot_usd       = round(total_a / exr, 0)
-            # 절대값 YTD
+            fin_net          = fin - total_d
+            liq_net          = liquid_a - total_d
+            net_usd          = round(net / exr, 0)
+            tot_usd          = round(total_a / exr, 0)
+            fin_net_usd      = round(fin_net / exr, 0)
+            liq_net_usd      = round(liq_net / exr, 0)
+
+            fin_start        = float(first["financial_assets"])      if pd.notna(first.get("financial_assets"))      else fin
+            liq_start        = float(first["liquid_assets"])         if pd.notna(first.get("liquid_assets"))         else liquid_a
+            fin_net_start    = float(first["fin_net_assets"])        if pd.notna(first.get("fin_net_assets"))        else fin_net
+            liq_net_start    = float(first["liquid_net_assets"])     if pd.notna(first.get("liquid_net_assets"))     else liq_net
+            base_exr         = float(first.get("exchange_rate") or exr)
+            fin_net_start_usd = round(fin_net_start / base_exr, 0)
+            liq_net_start_usd = round(liq_net_start / base_exr, 0)
+            fin_start_usd    = round(fin_start / base_exr, 0)
+            liq_start_usd    = round(liq_start / base_exr, 0)
+
+            # ── 순자산 YTD ──────────────────────────────────────────
             r["net_assets_krw_ytd"]        = net - net_start
             r["net_assets_usd_ytd"]        = round(net_usd - net_start_usd, 0)
             r["total_assets_krw_ytd"]      = total_a - tot_start
             r["total_assets_usd_ytd"]      = round(tot_usd - tot_start_usd, 0)
-            # 연초 자산 대비 자산 증가율
             r["total_assets_krw_ytd_pct"]  = round((total_a - tot_start) / tot_start * 100, 2)         if tot_start     else 0
             r["total_assets_usd_ytd_pct"]  = round((tot_usd - tot_start_usd) / tot_start_usd * 100, 2) if tot_start_usd else 0
-            # 연초 자산 대비 순자산 증가율
             r["net_on_assets_krw_ytd_pct"] = round((net - net_start) / tot_start * 100, 2)             if tot_start     else 0
             r["net_on_assets_usd_ytd_pct"] = round((net_usd - net_start_usd) / tot_start_usd * 100, 2) if tot_start_usd else 0
-            # 연초 순자산 대비 순자산 증가율 (순수 수익률)
             r["net_return_krw_ytd_pct"]    = round((net - net_start) / net_start * 100, 2)             if net_start     else 0
             r["net_return_usd_ytd_pct"]    = round((net_usd - net_start_usd) / net_start_usd * 100, 2) if net_start_usd else 0
-            # 실물자산 YTD
+
+            # ── 금융순자산 YTD ──────────────────────────────────────
+            r["fin_net_krw_ytd"]             = fin_net - fin_net_start
+            r["fin_net_usd_ytd"]             = round(fin_net_usd - fin_net_start_usd, 0)
+            r["fin_net_return_krw_ytd_pct"]  = round((fin_net - fin_net_start) / fin_net_start * 100, 2)           if fin_net_start else 0
+            r["fin_net_return_usd_ytd_pct"]  = round((fin_net_usd - fin_net_start_usd) / fin_net_start_usd * 100, 2) if fin_net_start_usd else 0
+            r["fin_net_on_fin_krw_ytd_pct"]  = round((fin_net - fin_net_start) / fin_start * 100, 2)               if fin_start     else 0
+            r["fin_net_on_fin_usd_ytd_pct"]  = round((fin_net_usd - fin_net_start_usd) / fin_start_usd * 100, 2)   if fin_start_usd else 0
+
+            # ── 유동순자산 YTD ──────────────────────────────────────
+            r["liq_net_krw_ytd"]             = liq_net - liq_net_start
+            r["liq_net_usd_ytd"]             = round(liq_net_usd - liq_net_start_usd, 0)
+            r["liq_net_return_krw_ytd_pct"]  = round((liq_net - liq_net_start) / liq_net_start * 100, 2)             if liq_net_start else 0
+            r["liq_net_return_usd_ytd_pct"]  = round((liq_net_usd - liq_net_start_usd) / liq_net_start_usd * 100, 2) if liq_net_start_usd else 0
+            r["liq_net_on_liq_krw_ytd_pct"]  = round((liq_net - liq_net_start) / liq_start * 100, 2)                if liq_start     else 0
+            r["liq_net_on_liq_usd_ytd_pct"]  = round((liq_net_usd - liq_net_start_usd) / liq_start_usd * 100, 2)    if liq_start_usd else 0
+
+            # ── 실물자산 YTD ────────────────────────────────────────
             r["real_asset_ytd"]            = real - real_start
             r["real_asset_ytd_pct"]        = round((real - real_start) / real_start * 100, 2) if real_start else 0
 
@@ -337,38 +368,61 @@ if page == "📊 대시보드":
     def _ytd(col):
         v = latest.get(col)
         return v if v is not None and not (isinstance(v, float) and math.isnan(v)) else None
-    def _col(c): return df[c] if c in df.columns else None
+    def _ser(c): return df[c] if c in df.columns else pd.Series(dtype=float)
 
-    cy1, cy2, cy3, cy4, cy5, cy6 = st.columns(6)
-    with cy1: card("자산증가율 ₩", fmt_pct(_ytd("total_assets_krw_ytd_pct")),
-                   sub=fmt_krw(_ytd("total_assets_krw_ytd")), color="blue")
-    with cy2: card("자산증가율 $", fmt_pct(_ytd("total_assets_usd_ytd_pct")),
-                   sub=fmt_usd(_ytd("total_assets_usd_ytd")), color="blue")
-    with cy3: card("순자산/자산 ₩", fmt_pct(_ytd("net_on_assets_krw_ytd_pct")),
-                   sub=fmt_krw(_ytd("net_assets_krw_ytd")), color="green")
-    with cy4: card("순자산/자산 $", fmt_pct(_ytd("net_on_assets_usd_ytd_pct")),
-                   sub=fmt_usd(_ytd("net_assets_usd_ytd")), color="green")
-    with cy5: card("순자산수익률 ₩", fmt_pct(_ytd("net_return_krw_ytd_pct")),
-                   sub=fmt_krw(_ytd("net_assets_krw_ytd")), color="gold")
-    with cy6: card("순자산수익률 $", fmt_pct(_ytd("net_return_usd_ytd_pct")),
-                   sub=fmt_usd(_ytd("net_assets_usd_ytd")), color="gold")
+    # 요약 카드 (9개: 3지표 × KRW/USD/절대)
+    cy1, cy2, cy3 = st.columns(3)
+    with cy1:
+        st.markdown("**순자산**")
+        ca, cb = st.columns(2)
+        ca.metric("수익률 ₩", fmt_pct(_ytd("net_return_krw_ytd_pct")), fmt_krw(_ytd("net_assets_krw_ytd")))
+        cb.metric("수익률 $", fmt_pct(_ytd("net_return_usd_ytd_pct")), fmt_usd(_ytd("net_assets_usd_ytd")))
+    with cy2:
+        st.markdown("**금융순자산**")
+        ca, cb = st.columns(2)
+        ca.metric("수익률 ₩", fmt_pct(_ytd("fin_net_return_krw_ytd_pct")), fmt_krw(_ytd("fin_net_krw_ytd")))
+        cb.metric("수익률 $", fmt_pct(_ytd("fin_net_return_usd_ytd_pct")), fmt_usd(_ytd("fin_net_usd_ytd")))
+    with cy3:
+        st.markdown("**유동순자산**")
+        ca, cb = st.columns(2)
+        ca.metric("수익률 ₩", fmt_pct(_ytd("liq_net_return_krw_ytd_pct")), fmt_krw(_ytd("liq_net_krw_ytd")))
+        cb.metric("수익률 $", fmt_pct(_ytd("liq_net_return_usd_ytd_pct")), fmt_usd(_ytd("liq_net_usd_ytd")))
 
-    _ytd_cols = {
-        "total_assets_krw_ytd_pct":  ("자산증가율(₩)",    "#0969da", "solid"),
-        "total_assets_usd_ytd_pct":  ("자산증가율($)",    "#0969da", "dash"),
-        "net_on_assets_krw_ytd_pct": ("순자산/자산(₩)",  "#1a7f37", "solid"),
-        "net_on_assets_usd_ytd_pct": ("순자산/자산($)",  "#1a7f37", "dash"),
-        "net_return_krw_ytd_pct":    ("순자산수익률(₩)", "#bf8700", "solid"),
-        "net_return_usd_ytd_pct":    ("순자산수익률($)", "#bf8700", "dash"),
-    }
-    fig_ytd = go.Figure()
-    for col, (name, color, dash) in _ytd_cols.items():
-        s = _col(col)
-        if s is not None:
-            fig_ytd.add_trace(go.Scatter(x=df["date"], y=s, name=name,
-                line=dict(color=color, width=2 if dash == "solid" else 1.5, dash=dash)))
-    fig_ytd.update_layout(**LAYOUT, title="YTD 성과 추이 (%)", yaxis_title="%")
-    st.plotly_chart(_add_markers(fig_ytd), use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 3열 토글 차트
+    ch1, ch2, ch3 = st.columns(3)
+
+    def _ytd_chart(col, title, ret_krw, ret_usd, on_krw, on_usd, key):
+        with col:
+            mode = st.radio("기준", ["연초 순자산 대비", "연초 자산 대비"],
+                            horizontal=True, label_visibility="collapsed", key=key)
+            krw_col = ret_krw if mode == "연초 순자산 대비" else on_krw
+            usd_col = ret_usd if mode == "연초 순자산 대비" else on_usd
+            fig = go.Figure()
+            s_krw = _ser(krw_col); s_usd = _ser(usd_col)
+            if not s_krw.empty:
+                fig.add_trace(go.Scatter(x=df["date"], y=s_krw, name="₩",
+                    line=dict(color="#1a7f37", width=2)))
+            if not s_usd.empty:
+                fig.add_trace(go.Scatter(x=df["date"], y=s_usd, name="$",
+                    line=dict(color="#0969da", width=2, dash="dash")))
+            fig.update_layout(**LAYOUT, title=title, yaxis_title="%",
+                              legend=dict(orientation="h", y=1.12, x=0))
+            st.plotly_chart(_add_markers(fig), use_container_width=True)
+
+    _ytd_chart(ch1, "순자산 YTD (%)",
+               "net_return_krw_ytd_pct",    "net_return_usd_ytd_pct",
+               "net_on_assets_krw_ytd_pct", "net_on_assets_usd_ytd_pct",
+               key="ytd_net")
+    _ytd_chart(ch2, "금융순자산 YTD (%)",
+               "fin_net_return_krw_ytd_pct",  "fin_net_return_usd_ytd_pct",
+               "fin_net_on_fin_krw_ytd_pct",  "fin_net_on_fin_usd_ytd_pct",
+               key="ytd_fin")
+    _ytd_chart(ch3, "유동순자산 YTD (%)",
+               "liq_net_return_krw_ytd_pct",  "liq_net_return_usd_ytd_pct",
+               "liq_net_on_liq_krw_ytd_pct",  "liq_net_on_liq_usd_ytd_pct",
+               key="ytd_liq")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
