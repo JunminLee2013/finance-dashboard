@@ -350,18 +350,18 @@ if page == "📊 대시보드":
     with cy1:
         st.markdown("**순자산** (연초 자산 대비)")
         ca, cb = st.columns(2)
-        ca.metric("₩", fmt_pct(_ytd("net_on_assets_krw_ytd_pct")), fmt_krw(_ytd("net_assets_krw_ytd")))
-        cb.metric("$", fmt_pct(_ytd("net_on_assets_usd_ytd_pct")), fmt_usd(_ytd("net_assets_usd_ytd")))
+        ca.metric("₩", fmt_pct(_ytd("net_on_assets_krw_ytd_pct")))
+        cb.metric("$", fmt_pct(_ytd("net_on_assets_usd_ytd_pct")))
     with cy2:
         st.markdown("**금융순자산** (연초 금융자산 대비)")
         ca, cb = st.columns(2)
-        ca.metric("₩", fmt_pct(_ytd("fin_net_on_fin_krw_ytd_pct")), fmt_krw(_ytd("fin_net_krw_ytd")))
-        cb.metric("$", fmt_pct(_ytd("fin_net_on_fin_usd_ytd_pct")), fmt_usd(_ytd("fin_net_usd_ytd")))
+        ca.metric("₩", fmt_pct(_ytd("fin_net_on_fin_krw_ytd_pct")))
+        cb.metric("$", fmt_pct(_ytd("fin_net_on_fin_usd_ytd_pct")))
     with cy3:
         st.markdown("**유동순자산** (연초 유동자산 대비)")
         ca, cb = st.columns(2)
-        ca.metric("₩", fmt_pct(_ytd("liq_net_on_liq_krw_ytd_pct")), fmt_krw(_ytd("liq_net_krw_ytd")))
-        cb.metric("$", fmt_pct(_ytd("liq_net_on_liq_usd_ytd_pct")), fmt_usd(_ytd("liq_net_usd_ytd")))
+        ca.metric("₩", fmt_pct(_ytd("liq_net_on_liq_krw_ytd_pct")))
+        cb.metric("$", fmt_pct(_ytd("liq_net_on_liq_usd_ytd_pct")))
 
     st.markdown("<br>", unsafe_allow_html=True)
 
