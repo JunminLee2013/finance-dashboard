@@ -415,9 +415,9 @@ if page == "📊 대시보드":
                     fig.add_trace(go.Scatter(
                         x=yr_df["date"], y=yr_df[usd_col], name=f"{yr}$",
                         line=dict(color=clr, width=1.5, dash="dash")))
-            fig.update_layout(**LAYOUT, title=title, yaxis_title="%",
-                              margin=dict(l=0, r=0, t=40, b=60))
-            fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.18, x=0))
+            fig.update_layout(**LAYOUT, title=title, yaxis_title="%")
+            fig.update_layout(margin=dict(l=0, r=0, t=40, b=60),
+                              legend=dict(orientation="h", yanchor="top", y=-0.18, x=0))
             st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     _ytd_chart(ch1, "순자산 YTD (%)",
