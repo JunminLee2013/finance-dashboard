@@ -407,8 +407,8 @@ if page == "📊 대시보드":
             if not s_usd.empty:
                 fig.add_trace(go.Scatter(x=df["date"], y=s_usd, name="$",
                     line=dict(color="#0969da", width=2, dash="dash")))
-            fig.update_layout(**LAYOUT, title=title, yaxis_title="%",
-                              legend=dict(orientation="h", y=1.12, x=0))
+            fig.update_layout(**LAYOUT, title=title, yaxis_title="%")
+            fig.update_layout(legend=dict(orientation="h", y=1.12, x=0))
             st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     _ytd_chart(ch1, "순자산 YTD (%)",
