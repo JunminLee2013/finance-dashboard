@@ -370,45 +370,54 @@ if page == "📊 대시보드":
         return v if v is not None and not (isinstance(v, float) and math.isnan(v)) else None
     def _ser(c): return df[c] if c in df.columns else pd.Series(dtype=float)
 
-    # 요약 카드 (9개: 3지표 × KRW/USD/절대)
+    # 요약 카드 — 자산 대비 % 기준
     cy1, cy2, cy3 = st.columns(3)
     with cy1:
-        st.markdown("**순자산**")
+        st.markdown("**순자산** (연초 자산 대비)")
         ca, cb = st.columns(2)
-        ca.metric("수익률 ₩", fmt_pct(_ytd("net_return_krw_ytd_pct")), fmt_krw(_ytd("net_assets_krw_ytd")))
-        cb.metric("수익률 $", fmt_pct(_ytd("net_return_usd_ytd_pct")), fmt_usd(_ytd("net_assets_usd_ytd")))
+        ca.metric("₩", fmt_pct(_ytd("net_on_assets_krw_ytd_pct")), fmt_krw(_ytd("net_assets_krw_ytd")))
+        cb.metric("$", fmt_pct(_ytd("net_on_assets_usd_ytd_pct")), fmt_usd(_ytd("net_assets_usd_ytd")))
     with cy2:
-        st.markdown("**금융순자산**")
+        st.markdown("**금융순자산** (연초 금융자산 대비)")
         ca, cb = st.columns(2)
-        ca.metric("수익률 ₩", fmt_pct(_ytd("fin_net_return_krw_ytd_pct")), fmt_krw(_ytd("fin_net_krw_ytd")))
-        cb.metric("수익률 $", fmt_pct(_ytd("fin_net_return_usd_ytd_pct")), fmt_usd(_ytd("fin_net_usd_ytd")))
+        ca.metric("₩", fmt_pct(_ytd("fin_net_on_fin_krw_ytd_pct")), fmt_krw(_ytd("fin_net_krw_ytd")))
+        cb.metric("$", fmt_pct(_ytd("fin_net_on_fin_usd_ytd_pct")), fmt_usd(_ytd("fin_net_usd_ytd")))
     with cy3:
-        st.markdown("**유동순자산**")
+        st.markdown("**유동순자산** (연초 유동자산 대비)")
         ca, cb = st.columns(2)
-        ca.metric("수익률 ₩", fmt_pct(_ytd("liq_net_return_krw_ytd_pct")), fmt_krw(_ytd("liq_net_krw_ytd")))
-        cb.metric("수익률 $", fmt_pct(_ytd("liq_net_return_usd_ytd_pct")), fmt_usd(_ytd("liq_net_usd_ytd")))
+        ca.metric("₩", fmt_pct(_ytd("liq_net_on_liq_krw_ytd_pct")), fmt_krw(_ytd("liq_net_krw_ytd")))
+        cb.metric("$", fmt_pct(_ytd("liq_net_on_liq_usd_ytd_pct")), fmt_usd(_ytd("liq_net_usd_ytd")))
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # 3열 토글 차트
     ch1, ch2, ch3 = st.columns(3)
+    _ref_col = "reference_month" if "reference_month" in df.columns and df["reference_month"].notna().any() else "date"
+    _year_palette = ["#0969da", "#1a7f37", "#bf8700", "#8250df", "#cf222e", "#57606a"]
 
     def _ytd_chart(col, title, ret_krw, ret_usd, on_krw, on_usd, key):
         with col:
-            mode = st.radio("기준", ["연초 순자산 대비", "연초 자산 대비"],
+            mode = st.radio("기준", ["연초 자산 대비", "연초 순자산 대비"],
                             horizontal=True, label_visibility="collapsed", key=key)
-            krw_col = ret_krw if mode == "연초 순자산 대비" else on_krw
-            usd_col = ret_usd if mode == "연초 순자산 대비" else on_usd
+            krw_col = on_krw if mode == "연초 자산 대비" else ret_krw
+            usd_col = on_usd if mode == "연초 자산 대비" else ret_usd
             fig = go.Figure()
-            s_krw = _ser(krw_col); s_usd = _ser(usd_col)
-            if not s_krw.empty:
-                fig.add_trace(go.Scatter(x=df["date"], y=s_krw, name="₩",
-                    line=dict(color="#1a7f37", width=2)))
-            if not s_usd.empty:
-                fig.add_trace(go.Scatter(x=df["date"], y=s_usd, name="$",
-                    line=dict(color="#0969da", width=2, dash="dash")))
-            fig.update_layout(**LAYOUT, title=title, yaxis_title="%")
-            fig.update_layout(legend=dict(orientation="h", y=1.12, x=0))
+            years = sorted(df[_ref_col].dt.year.dropna().unique())
+            for i, yr in enumerate(years):
+                clr = _year_palette[i % len(_year_palette)]
+                mask = df[_ref_col].dt.year == yr
+                yr_df = df[mask]
+                if krw_col in df.columns and yr_df[krw_col].notna().any():
+                    fig.add_trace(go.Scatter(
+                        x=yr_df["date"], y=yr_df[krw_col], name=f"{yr}₩",
+                        line=dict(color=clr, width=2)))
+                if usd_col in df.columns and yr_df[usd_col].notna().any():
+                    fig.add_trace(go.Scatter(
+                        x=yr_df["date"], y=yr_df[usd_col], name=f"{yr}$",
+                        line=dict(color=clr, width=1.5, dash="dash")))
+            fig.update_layout(**LAYOUT, title=title, yaxis_title="%",
+                              margin=dict(l=0, r=0, t=40, b=60))
+            fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.18, x=0))
             st.plotly_chart(_add_markers(fig), use_container_width=True)
 
     _ytd_chart(ch1, "순자산 YTD (%)",
