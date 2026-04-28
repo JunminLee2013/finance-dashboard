@@ -395,7 +395,7 @@ if page == "📊 대시보드":
             fig.update_layout(**LAYOUT, title=title, yaxis_title="%")
             fig.update_layout(margin=dict(l=0, r=0, t=40, b=60),
                               legend=dict(orientation="h", yanchor="top", y=-0.18, x=0))
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True, key=f"ytd_{key}")
 
     _ytd_chart(ch1, "순자산 YTD (%)",
                "net_return_krw_ytd_pct",    "net_return_usd_ytd_pct",
@@ -492,53 +492,69 @@ elif page == "📝 데이터 입력":
 
     auto_exr = fetch_exchange_rate()
 
-    with st.form("entry_form"):
-        inp = {}
+    inp = {}
 
-        # ─── 기본 정보 ───────────────────────────────────────────
-        st.markdown("### 📅 기본 정보")
-        _last_ref = last.get("reference_month")
-        _def_ref  = pd.to_datetime(_last_ref) if _last_ref and pd.notna(_last_ref) else pd.to_datetime(date.today())
-        _years    = list(range(2020, date.today().year + 2))
-        ci1, ci2, ci3 = st.columns(3)
-        sel_year  = ci1.selectbox("기준 연도", _years, index=_years.index(_def_ref.year))
-        sel_month = ci2.selectbox("기준 월", range(1, 13), index=_def_ref.month - 1,
-                                  format_func=lambda m: f"{m}월")
-        inp["reference_month"] = f"{sel_year}-{sel_month:02d}-01"
-        inp["date"]            = date.today().strftime("%Y-%m-%d")
-        _exr_label   = "환율 (₩/$) 🔄자동" if auto_exr else "환율 (₩/$)"
-        _exr_default = float(auto_exr) if auto_exr else dv("exchange_rate", 1300)
-        inp["exchange_rate"] = ci3.number_input(_exr_label, value=_exr_default, step=1.0, format="%g")
+    # ─── 기본 정보 ───────────────────────────────────────────
+    st.markdown("### 📅 기본 정보")
+    _last_ref = last.get("reference_month")
+    _def_ref  = (pd.to_datetime(_last_ref) + pd.DateOffset(months=1)
+                 if _last_ref and pd.notna(_last_ref)
+                 else pd.to_datetime(date.today()))
+    _years    = list(range(2020, date.today().year + 2))
+    ci1, ci2, ci3 = st.columns(3)
+    sel_year  = ci1.selectbox("기준 연도", _years, index=_years.index(_def_ref.year))
+    sel_month = ci2.selectbox("기준 월", range(1, 13), index=_def_ref.month - 1,
+                              format_func=lambda m: f"{m}월")
+    inp["reference_month"] = f"{sel_year}-{sel_month:02d}-01"
+    inp["date"]            = date.today().strftime("%Y-%m-%d")
+    _exr_label   = "환율 (₩/$) 🔄자동" if auto_exr else "환율 (₩/$)"
+    _exr_default = float(auto_exr) if auto_exr else dv("exchange_rate", 1300)
+    inp["exchange_rate"] = ci3.number_input(_exr_label, value=_exr_default, step=1.0, format="%g")
 
-        # ─── 나머지 항목 ─────────────────────────────────────────
-        for group_name, fields in GROUPS:
-            st.markdown(f"### {group_name}")
-            ncols = min(len(fields), 4)
-            cols  = st.columns(ncols)
-            for i, (key, _, default) in enumerate(fields):
-                with cols[i % ncols]:
-                    inp[key] = st.number_input(LABELS.get(key, key), value=default, step=10000.0, format="%g")
+    # ─── 나머지 항목 ─────────────────────────────────────────
+    for group_name, fields in GROUPS:
+        st.markdown(f"### {group_name}")
+        ncols = min(len(fields), 4)
+        cols  = st.columns(ncols)
+        for i, (key, _, default) in enumerate(fields):
+            with cols[i % ncols]:
+                inp[key] = st.number_input(LABELS.get(key, key), value=default, step=10000.0, format="%g")
+                delta = inp[key] - dv(key)
+                if delta != 0:
+                    color = "#1a7f37" if delta >= 0 else "#cf222e"
+                    sign  = "+" if delta > 0 else ""
+                    st.markdown(
+                        f"<div style='color:{color};font-size:11px;margin-top:-14px'>"
+                        f"{sign}{fmt_krw(delta)}</div>",
+                        unsafe_allow_html=True,
+                    )
 
-        # 미리보기
-        st.markdown("---")
-        st.markdown("#### 🔢 자동 계산 미리보기")
-        derived = calc_derived(inp, df)
-        p1, p2, p3, p4 = st.columns(4)
-        p1.metric("총 자산",   fmt_krw(derived["total_assets"]),  f"USD {fmt_usd(derived['total_assets_usd'])}")
-        p2.metric("총 부채",   fmt_krw(derived["total_debt"]))
-        p3.metric("순자산",    fmt_krw(derived["net_assets"]),    f"USD {fmt_usd(derived['net_assets_usd'])}")
-        p4.metric("부채 비율", fmt_pct(derived["debt_ratio"]))
+    # 미리보기
+    st.markdown("---")
+    st.markdown("#### 🔢 자동 계산 미리보기")
+    derived = calc_derived(inp, df)
+    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+    r1c1.metric("총 자산",    fmt_krw(derived["total_assets"]),  f"USD {fmt_usd(derived['total_assets_usd'])}")
+    r1c2.metric("총 부채",    fmt_krw(derived["total_debt"]))
+    r1c3.metric("순자산",     fmt_krw(derived["net_assets"]),    f"USD {fmt_usd(derived['net_assets_usd'])}")
+    r1c4.metric("부채 비율",  fmt_pct(derived["debt_ratio"]))
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+    r2c1.metric("금융순자산", fmt_krw(derived.get("fin_net_assets", 0)))
+    r2c2.metric("유동순자산", fmt_krw(derived.get("liquid_net_assets", 0)))
+    _ytd_krw = derived.get("net_assets_krw_ytd")
+    _ytd_pct = derived.get("net_on_assets_krw_ytd_pct")
+    r2c3.metric("순자산 YTD", fmt_krw(_ytd_krw) if _ytd_krw is not None else "—")
+    r2c4.metric("순자산 YTD %", fmt_pct(_ytd_pct) if _ytd_pct is not None else "—")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        submitted = st.form_submit_button("✅ 저장하기", use_container_width=True)
-        if submitted:
-            full = {**inp, **derived}
-            try:
-                save_row(full)
-                st.success(f"✅ {inp['reference_month'][:7]} 데이터가 저장됐습니다!")
-                st.balloons()
-            except Exception as e:
-                st.error(f"저장 실패: {e}")
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("✅ 저장하기", use_container_width=True):
+        full = {**inp, **derived}
+        try:
+            save_row(full)
+            st.success(f"✅ {inp['reference_month'][:7]} 데이터가 저장됐습니다!")
+            st.balloons()
+        except Exception as e:
+            st.error(f"저장 실패: {e}")
 
 # ══════════════════════════════════════════════════════════════════
 # 📋 데이터 관리
@@ -682,7 +698,7 @@ elif page == "📈 상세 분석":
             line=dict(color="#fa4549",width=1,dash="dash")), secondary_y=True)
         fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
                           yaxis_title="원(₩)", yaxis2_title="달러($)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_net_assets")
     with tab1b:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df["date"], y=df["financial_assets"], name="금융자산",
@@ -692,7 +708,7 @@ elif page == "📈 상세 분석":
         fig.add_trace(go.Scatter(x=df["date"], y=df["fin_net_assets"],   name="금융순자산",
             line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
         fig.update_layout(**LAYOUT, title="금융순자산 추이", yaxis_title="원(₩)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_fin_net")
     with tab1c:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"],     name="유동자산",
@@ -702,7 +718,7 @@ elif page == "📈 상세 분석":
         fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_net_assets"], name="유동순자산",
             line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
         fig.update_layout(**LAYOUT, title="유동순자산 추이", yaxis_title="원(₩)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_liq_net")
     with tab2:
         c1, c2 = st.columns(2)
         with c1:
@@ -712,7 +728,7 @@ elif page == "📈 상세 분석":
             fig.add_trace(go.Scatter(x=df["date"], y=df["real_assets"],      name="실물자산",
                 line=dict(color="#bf8700",width=2)))
             fig.update_layout(**LAYOUT, title="금융 vs 실물 추이", yaxis_title="원(₩)")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_fin_real")
         with c2:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_assets"],   name="유동자산",
@@ -720,7 +736,7 @@ elif page == "📈 상세 분석":
             fig.add_trace(go.Scatter(x=df["date"], y=df["illiquid_assets"], name="비유동자산",
                 line=dict(color="#8c959f",width=2)))
             fig.update_layout(**LAYOUT, title="유동 vs 비유동 추이", yaxis_title="원(₩)")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_liq_illiq")
         def _c(col): return df[col].fillna(0) if col in df.columns else pd.Series(0, index=df.index, dtype=float)
         _r2  = _c("real_assets").where(_c("real_assets") > 0, _c("real_estate"))
         _ca2 = _c("cash_assets"); _st2 = _c("stock_assets"); _co2 = _c("coin_assets")
@@ -742,7 +758,7 @@ elif page == "📈 상세 분석":
         for vals, name, color in traces2:
             fig.add_trace(go.Bar(x=df["date"], y=vals, name=name, marker_color=color))
         fig.update_layout(**LAYOUT, barmode="stack", title="자산 구성 추이 (원화)", yaxis_title="원(₩)")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_asset_stack")
     with tab3:
         c1, c2 = st.columns(2)
         with c1:
@@ -750,12 +766,12 @@ elif page == "📈 상세 분석":
             fig.add_trace(go.Bar(x=df["date"], y=df["fin_debt"],  name="금융부채", marker_color="#f85149"))
             fig.add_trace(go.Bar(x=df["date"], y=df["real_debt"], name="실물부채", marker_color="#da3633"))
             fig.update_layout(**LAYOUT, barmode="stack", title="부채 구성 추이")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_debt_stack")
         with c2:
             fig = go.Figure(go.Scatter(x=df["date"], y=df["debt_ratio"], name="부채비율",
                 line=dict(color="#f85149",width=2), fill="tozeroy", fillcolor="rgba(248,81,73,0.08)"))
             fig.update_layout(**LAYOUT, title="부채 비율 추이 (%)", yaxis_title="%")
-            st.plotly_chart(_add_markers(fig), use_container_width=True)
+            st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_debt_ratio")
     with tab4:
         st.markdown('<div class="sec">최신 연금 현황</div>', unsafe_allow_html=True)
         c1, c2, c3, c4, c5 = st.columns(5)
@@ -778,7 +794,7 @@ elif page == "📈 상세 분석":
             fig.add_trace(go.Scatter(x=df["date"], y=_ps(a, b), name=lbl,
                 line=dict(color=clrs_p[i], width=2)))
         fig.update_layout(**LAYOUT, title="연금 자산 추이")
-        st.plotly_chart(_add_markers(fig), use_container_width=True)
+        st.plotly_chart(_add_markers(fig), use_container_width=True, key="tab4_pension")
 
     st.markdown("<br>", unsafe_allow_html=True)
     year = pd.to_datetime(latest[_ref_col]).year
@@ -807,7 +823,7 @@ elif page == "📈 상세 분석":
     fig = go.Figure(go.Bar(x=dd["date"], y=dd["delta"],
         marker_color=["#2ea043" if v>=0 else "#f85149" for v in dd["delta"]]))
     fig.update_layout(**LAYOUT, title="월간 순자산 증감", yaxis_title="원")
-    st.plotly_chart(_add_markers(fig), use_container_width=True)
+    st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_monthly_delta")
 
     # 자산 비중
     st.markdown('<div class="sec">자산 비중 변화</div>', unsafe_allow_html=True)
@@ -850,7 +866,7 @@ elif page == "📈 상세 분석":
             line=dict(color=color, width=2), stackgroup="one", groupnorm="percent"))
     fig.update_layout(**LAYOUT, title="자산 비중 추이 (%)", yaxis_title="%")
     fig.update_yaxes(tickformat=".1f")
-    st.plotly_chart(_add_markers(fig), use_container_width=True)
+    st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_asset_ratio")
 
     # 연금
     st.markdown('<div class="sec">연금 자산 추이</div>', unsafe_allow_html=True)
@@ -865,4 +881,4 @@ elif page == "📈 상세 분석":
         fig.add_trace(go.Scatter(x=df["date"], y=vals, name=lbl,
             line=dict(color=["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"][i], width=2)))
     fig.update_layout(**LAYOUT, title="연금 자산 추이")
-    st.plotly_chart(_add_markers(fig), use_container_width=True)
+    st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_pension")
