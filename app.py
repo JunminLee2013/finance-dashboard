@@ -372,12 +372,22 @@ if page == "📊 대시보드":
     _disp_yr = df[_ref_col].dt.year.where(df[_ref_col].dt.month != 1, df[_ref_col].dt.year - 1)
     _year_palette = ["#0969da", "#1a7f37", "#bf8700", "#8250df", "#cf222e", "#57606a"]
 
-    def _ytd_chart(col, title, ret_krw, ret_usd, on_krw, on_usd, key):
+    # 통계청 가계금융복지조사 순자산 분위 경계값 (lbl, 2024값원, 2025값원, color)
+    _NET_THR = [
+        ("상위 50%", 240_000_000,   238_600_000,   "#aaaaaa"),
+        ("상위 40%", 328_380_000,   330_500_000,   "#999999"),
+        ("상위 30%", 453_560_000,   461_800_000,   "#bf8700"),
+        ("상위 20%", 664_500_000,   693_800_000,   "#0969da"),
+        ("상위 10%", 1_045_920_000, 1_100_200_000, "#8250df"),
+    ]
+
+    def _ytd_chart(col, title, ret_krw, ret_usd, on_krw, on_usd, key, thresholds=None):
         with col:
             mode = st.radio("기준", ["연초 자산 대비", "연초 순자산 대비"],
                             horizontal=True, label_visibility="collapsed", key=key)
-            krw_col = on_krw if mode == "연초 자산 대비" else ret_krw
-            usd_col = on_usd if mode == "연초 자산 대비" else ret_usd
+            is_asset_base = (mode == "연초 자산 대비")
+            krw_col = on_krw if is_asset_base else ret_krw
+            usd_col = on_usd if is_asset_base else ret_usd
             fig = go.Figure()
             years = sorted(_disp_yr.dropna().unique().astype(int))
             for i, yr in enumerate(years):
@@ -392,6 +402,42 @@ if page == "📊 대시보드":
                     fig.add_trace(go.Scatter(
                         x=yr_df["date"], y=yr_df[usd_col], name=f"{yr}$",
                         line=dict(color=clr, width=1.5, dash="dash")))
+
+            if thresholds:
+                for yr in years:
+                    # 연도별 YTD 기준값: 해당 캘린더 연도의 첫 번째 레코드
+                    base_df = df[df[_ref_col].dt.year == yr].sort_values(_ref_col)
+                    if base_df.empty:
+                        continue
+                    base     = base_df.iloc[0]
+                    net_s    = float(base.get("net_assets")   or 0)
+                    tot_s    = float(base.get("total_assets") or 0)
+                    mask     = _disp_yr == yr
+                    yr_df    = df[mask]
+                    if yr_df.empty:
+                        continue
+                    xs, xe = yr_df["date"].min(), yr_df["date"].max()
+                    for lbl, v24, v25, clr in thresholds:
+                        thr = v24 if yr <= 2024 else v25
+                        denom = tot_s if is_asset_base else net_s
+                        if not denom:
+                            continue
+                        pct = (thr - net_s) / denom * 100
+                        is_last = (yr == max(years))
+                        fig.add_trace(go.Scatter(
+                            x=[xs, xe], y=[pct, pct],
+                            mode="lines",
+                            line=dict(color=clr, width=1, dash="dot"),
+                            showlegend=False,
+                            hovertemplate=f"{lbl} ({yr}): {pct:.1f}%<extra></extra>",
+                        ))
+                        if is_last:
+                            fig.add_annotation(
+                                x=1, xref="paper", y=pct, yref="y",
+                                text=lbl, showarrow=False,
+                                xanchor="right", font=dict(size=9, color=clr),
+                            )
+
             fig.update_layout(**LAYOUT, title=title, yaxis_title="%")
             fig.update_layout(margin=dict(l=0, r=0, t=40, b=60),
                               legend=dict(orientation="h", yanchor="top", y=-0.18, x=0))
@@ -400,7 +446,7 @@ if page == "📊 대시보드":
     _ytd_chart(ch1, "순자산 YTD (%)",
                "net_return_krw_ytd_pct",    "net_return_usd_ytd_pct",
                "net_on_assets_krw_ytd_pct", "net_on_assets_usd_ytd_pct",
-               key="ytd_net")
+               key="ytd_net", thresholds=_NET_THR)
     _ytd_chart(ch2, "금융순자산 YTD (%)",
                "fin_net_return_krw_ytd_pct",  "fin_net_return_usd_ytd_pct",
                "fin_net_on_fin_krw_ytd_pct",  "fin_net_on_fin_usd_ytd_pct",
