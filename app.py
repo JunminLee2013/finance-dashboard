@@ -381,7 +381,8 @@ if page == "📊 대시보드":
         ("상위 10%", 1_045_920_000, 1_100_200_000, "#8250df"),
     ]
 
-    def _ytd_chart(col, title, ret_krw, ret_usd, on_krw, on_usd, key, thresholds=None):
+    def _ytd_chart(col, title, ret_krw, ret_usd, on_krw, on_usd, key, thresholds=None,
+                   base_net_col="net_assets", base_tot_col="total_assets"):
         with col:
             mode = st.radio("기준", ["연초 자산 대비", "연초 순자산 대비"],
                             horizontal=True, label_visibility="collapsed", key=key)
@@ -410,8 +411,8 @@ if page == "📊 대시보드":
                     if base_df.empty:
                         continue
                     base     = base_df.iloc[0]
-                    net_s    = float(base.get("net_assets")   or 0)
-                    tot_s    = float(base.get("total_assets") or 0)
+                    net_s    = float(base.get(base_net_col) or 0)
+                    tot_s    = float(base.get(base_tot_col) or 0)
                     mask     = _disp_yr == yr
                     yr_df    = df[mask]
                     if yr_df.empty:
@@ -454,7 +455,8 @@ if page == "📊 대시보드":
     _ytd_chart(ch3, "유동순자산 YTD (%)",
                "liq_net_return_krw_ytd_pct",  "liq_net_return_usd_ytd_pct",
                "liq_net_on_liq_krw_ytd_pct",  "liq_net_on_liq_usd_ytd_pct",
-               key="ytd_liq")
+               key="ytd_liq", thresholds=_NET_THR,
+               base_net_col="liquid_net_assets", base_tot_col="liquid_assets")
 
 # ══════════════════════════════════════════════════════════════════
 # 📝 데이터 입력
@@ -795,6 +797,24 @@ elif page == "📈 상세 분석":
             line=dict(color="#cf222e",width=2,dash="dot")))
         fig.add_trace(go.Scatter(x=df["date"], y=df["liquid_net_assets"], name="유동순자산",
             line=dict(color="#1a7f37",width=2.5), fill="tozeroy", fillcolor="rgba(26,127,55,0.08)"))
+        # 통계청 가계금융복지조사 연도별 순자산 분위 경계값 (단위: 원)
+        for _lbl, _v24, _v25, _clr in _NET_THR:
+            for _xs, _xe, _val in [
+                (pd.Timestamp("2024-01-01"), pd.Timestamp("2024-12-31"), _v24),
+                (pd.Timestamp("2025-01-01"), _thr_end,                   _v25),
+            ]:
+                fig.add_trace(go.Scatter(
+                    x=[_xs, _xe], y=[_val, _val],
+                    mode="lines",
+                    line=dict(color=_clr, width=1, dash="dot"),
+                    showlegend=False,
+                    hovertemplate=f"{_lbl}: {fmt_krw(_val)}<extra></extra>",
+                ))
+            fig.add_annotation(
+                x=1, xref="paper", y=_v25, yref="y",
+                text=_lbl, showarrow=False,
+                xanchor="right", font=dict(size=10, color=_clr),
+            )
         fig.update_layout(**LAYOUT, title="유동순자산 추이", yaxis_title="원(₩)")
         st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_liq_net")
     with tab2:
