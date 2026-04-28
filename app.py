@@ -705,10 +705,16 @@ elif page == "📈 상세 분석":
             ("상위 20%", 664_500_000,   693_800_000,   "#0969da"),
             ("상위 10%", 1_045_920_000, 1_100_200_000, "#8250df"),
         ]
+        _thr_segs = {
+            2024: pd.Timestamp("2024-01-01"),
+            2025: pd.Timestamp("2025-01-01"),
+            2026: pd.Timestamp("2026-01-01"),
+        }
+        _thr_end = df["date"].max() + pd.DateOffset(months=2)
         for _lbl, _v24, _v25, _clr in _NET_THR:
             for _xs, _xe, _val in [
-                ("2024-01-01", "2024-12-31", _v24),
-                ("2025-01-01", "2026-12-31", _v25),  # 2026은 2025 값 사용
+                (pd.Timestamp("2024-01-01"), pd.Timestamp("2024-12-31"), _v24),
+                (pd.Timestamp("2025-01-01"), _thr_end,                   _v25),
             ]:
                 fig.add_trace(go.Scatter(
                     x=[_xs, _xe], y=[_val, _val],
