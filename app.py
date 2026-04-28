@@ -447,7 +447,7 @@ if page == "📊 대시보드":
     _ytd_chart(ch1, "순자산 YTD (%)",
                "net_return_krw_ytd_pct",    "net_return_usd_ytd_pct",
                "net_on_assets_krw_ytd_pct", "net_on_assets_usd_ytd_pct",
-               key="ytd_net", thresholds=_NET_THR)
+               key="ytd_net")
     _ytd_chart(ch2, "금융순자산 YTD (%)",
                "fin_net_return_krw_ytd_pct",  "fin_net_return_usd_ytd_pct",
                "fin_net_on_fin_krw_ytd_pct",  "fin_net_on_fin_usd_ytd_pct",
@@ -455,8 +455,7 @@ if page == "📊 대시보드":
     _ytd_chart(ch3, "유동순자산 YTD (%)",
                "liq_net_return_krw_ytd_pct",  "liq_net_return_usd_ytd_pct",
                "liq_net_on_liq_krw_ytd_pct",  "liq_net_on_liq_usd_ytd_pct",
-               key="ytd_liq", thresholds=_NET_THR,
-               base_net_col="liquid_net_assets", base_tot_col="liquid_assets")
+               key="ytd_liq")
 
 # ══════════════════════════════════════════════════════════════════
 # 📝 데이터 입력
