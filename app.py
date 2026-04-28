@@ -696,18 +696,32 @@ elif page == "📈 상세 분석":
             line=dict(color="#388bfd",width=1,dash="dash")), secondary_y=True)
         fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt_usd"],   name="총부채(USD)",
             line=dict(color="#fa4549",width=1,dash="dash")), secondary_y=True)
-        # 통계청 가계금융복지조사 2025년 순자산 분위 경계값
-        _net_thresholds = [
-            (2_386_000_000,  "상위 50%", "#aaaaaa"),
-            (3_305_000_000,  "상위 40%", "#888888"),
-            (4_618_000_000,  "상위 30%", "#bf8700"),
-            (6_938_000_000,  "상위 20%", "#0969da"),
-            (11_002_000_000, "상위 10%", "#8250df"),
+        # 통계청 가계금융복지조사 연도별 순자산 분위 경계값 (단위: 원)
+        # (lbl, 2024값, 2025값, color)
+        _NET_THR = [
+            ("상위 50%", 240_000_000,   238_600_000,   "#aaaaaa"),
+            ("상위 40%", 328_380_000,   330_500_000,   "#999999"),
+            ("상위 30%", 453_560_000,   461_800_000,   "#bf8700"),
+            ("상위 20%", 664_500_000,   693_800_000,   "#0969da"),
+            ("상위 10%", 1_045_920_000, 1_100_200_000, "#8250df"),
         ]
-        for _val, _lbl, _clr in _net_thresholds:
-            fig.add_hline(y=_val, line_dash="dot", line_color=_clr, line_width=1,
-                          annotation_text=_lbl, annotation_position="top right",
-                          annotation_font_size=11, annotation_font_color=_clr)
+        for _lbl, _v24, _v25, _clr in _NET_THR:
+            for _xs, _xe, _val in [
+                ("2024-01-01", "2024-12-31", _v24),
+                ("2025-01-01", "2026-12-31", _v25),  # 2026은 2025 값 사용
+            ]:
+                fig.add_trace(go.Scatter(
+                    x=[_xs, _xe], y=[_val, _val],
+                    mode="lines",
+                    line=dict(color=_clr, width=1, dash="dot"),
+                    showlegend=False,
+                    hovertemplate=f"{_lbl}: {fmt_krw(_val)}<extra></extra>",
+                ), secondary_y=False)
+            fig.add_annotation(
+                x=1, xref="paper", y=_v25, yref="y",
+                text=_lbl, showarrow=False,
+                xanchor="right", font=dict(size=10, color=_clr),
+            )
         fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
                           yaxis_title="원(₩)", yaxis2_title="달러($)")
         st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_net_assets")
