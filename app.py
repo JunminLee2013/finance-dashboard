@@ -696,6 +696,18 @@ elif page == "📈 상세 분석":
             line=dict(color="#388bfd",width=1,dash="dash")), secondary_y=True)
         fig.add_trace(go.Scatter(x=df["date"], y=df["total_debt_usd"],   name="총부채(USD)",
             line=dict(color="#fa4549",width=1,dash="dash")), secondary_y=True)
+        # 통계청 가계금융복지조사 2025년 순자산 분위 경계값
+        _net_thresholds = [
+            (2_386_000_000,  "상위 50%", "#aaaaaa"),
+            (3_305_000_000,  "상위 40%", "#888888"),
+            (4_618_000_000,  "상위 30%", "#bf8700"),
+            (6_938_000_000,  "상위 20%", "#0969da"),
+            (11_002_000_000, "상위 10%", "#8250df"),
+        ]
+        for _val, _lbl, _clr in _net_thresholds:
+            fig.add_hline(y=_val, line_dash="dot", line_color=_clr, line_width=1,
+                          annotation_text=_lbl, annotation_position="top right",
+                          annotation_font_size=11, annotation_font_color=_clr)
         fig.update_layout(**LAYOUT, title="순자산 / 자산 / 부채 추이",
                           yaxis_title="원(₩)", yaxis2_title="달러($)")
         st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_net_assets")
