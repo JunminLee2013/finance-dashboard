@@ -455,8 +455,7 @@ if page == "📊 대시보드":
     _ytd_chart(ch3, "유동순자산 YTD (%)",
                "liq_net_return_krw_ytd_pct",  "liq_net_return_usd_ytd_pct",
                "liq_net_on_liq_krw_ytd_pct",  "liq_net_on_liq_usd_ytd_pct",
-               key="ytd_liq", thresholds=_NET_THR,
-               base_net_col="liquid_net_assets", base_tot_col="liquid_assets")
+               key="ytd_liq")
 
 # ══════════════════════════════════════════════════════════════════
 # 📝 데이터 입력
