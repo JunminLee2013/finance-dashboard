@@ -103,7 +103,7 @@ RAW_INPUT_MAP = {
     "준민_금융부채":            "jm_fin_debt",
     "동금씨_투자금":            "donggum_invest",
     "은미_금융부채":            "em_fin_debt",
-    "카드값":                   "card_debt",
+    "카드값":                   "jm_card_debt",
     # 실물부채
     "실물부채":                 "real_debt",
     # 연금

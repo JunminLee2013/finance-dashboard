@@ -34,7 +34,7 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     illiquid_a = pension            # 비유동자산: 연금
     total_a    = liquid_a + illiquid_a
 
-    fin_debt  = g("jm_fin_debt") + g("donggum_invest") + g("em_fin_debt") + g("card_debt")
+    fin_debt  = g("jm_fin_debt") + g("donggum_invest") + g("em_fin_debt") + g("jm_card_debt") + g("em_card_debt")
     real_debt = g("real_debt")
     total_d   = fin_debt + real_debt
     net       = total_a - total_d

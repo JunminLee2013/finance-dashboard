@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS public.finance_monthly (
     jm_fin_debt                 NUMERIC DEFAULT 0,       -- 준민 금융부채
     donggum_invest              NUMERIC DEFAULT 0,       -- 동금씨 투자금
     em_fin_debt                 NUMERIC DEFAULT 0,       -- 은미 금융부채
-    card_debt                   NUMERIC DEFAULT 0,       -- 카드값
+    jm_card_debt                NUMERIC DEFAULT 0,       -- 준민 카드값
+    em_card_debt                NUMERIC DEFAULT 0,       -- 은미 카드값
 
     -- 실물부채
     real_debt                   NUMERIC DEFAULT 0,       -- 주담대 등
@@ -140,3 +141,12 @@ CREATE INDEX IF NOT EXISTS idx_finance_monthly_date
 -- ALTER TABLE public.finance_monthly ENABLE ROW LEVEL SECURITY;
 
 COMMENT ON TABLE public.finance_monthly IS '월별 재무상태표 - 개인 자산/부채 트래킹';
+
+-- ================================================================
+-- 마이그레이션: card_debt → jm_card_debt + em_card_debt 분리
+-- 기존 DB에서 한 번만 실행 (이미 위 CREATE에 반영된 신규 DB는 불필요)
+-- ================================================================
+-- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS jm_card_debt NUMERIC DEFAULT 0;
+-- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS em_card_debt NUMERIC DEFAULT 0;
+-- UPDATE public.finance_monthly SET jm_card_debt = COALESCE(card_debt, 0) WHERE card_debt IS NOT NULL;
+-- ALTER TABLE public.finance_monthly DROP COLUMN card_debt;
