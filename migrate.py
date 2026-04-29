@@ -1,6 +1,12 @@
 """
 migrate.py - 구글 스프레드시트 CSV -> Supabase 마이그레이션 스크립트
 
+전략:
+  1. CSV에선 raw input(원본 입력 항목)만 읽는다.
+  2. derived.calc_derived 로 모든 파생 지표/YTD를 재계산한다.
+  3. 재계산 결과를 Supabase에 upsert 한다.
+  -> app.py와 동일한 계산식이 보장되고, 컬럼이 추가돼도 derived.py만 고치면 됨.
+
 사용법:
   1. 구글 스프레드시트 -> 파일 -> 다운로드 -> CSV 저장 -> data.csv로 이름 변경
   2. 이 폴더에 data.csv 넣기
@@ -8,12 +14,14 @@ migrate.py - 구글 스프레드시트 CSV -> Supabase 마이그레이션 스크
   4. python migrate.py
 """
 
+import math
+import json
 import pandas as pd
 import requests
-import json
-import math
 
-# 설정
+from derived import calc_derived
+
+# ── 설정 ──────────────────────────────────────────────────────────
 SUPABASE_URL = input("Supabase URL을 입력하세요: ").strip().rstrip("/")
 SUPABASE_KEY = input("Supabase anon key를 입력하세요: ").strip()
 CSV_FILE     = input("CSV 파일 경로 (기본: data.csv): ").strip() or "data.csv"
@@ -22,23 +30,15 @@ HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json",
-    "Prefer": "resolution=merge-duplicates",
+    "Prefer": "resolution=merge-duplicates,return=minimal",
 }
 API_URL = f"{SUPABASE_URL}/rest/v1/finance_monthly"
 print(f"\n접속 URL: {API_URL}\n")
 
-# CSV 로드
-print(f"CSV 읽는 중: {CSV_FILE}")
-try:
-    raw = pd.read_csv(CSV_FILE, encoding="utf-8-sig", header=0)
-except UnicodeDecodeError:
-    raw = pd.read_csv(CSV_FILE, encoding="cp949", header=0)
-
-print(f"  -> {len(raw)}행, {len(raw.columns)}열 발견")
-
-# 실제 CSV 헤더 순서대로 컬럼명 직접 지정
-# 중복 컬럼(평가액, 납입누계, 수익금, 은미연금저축 등)을 위치 기반으로 구분
-raw.columns = [
+# ── CSV 컬럼 정의 ─────────────────────────────────────────────────
+# 실제 CSV 헤더 순서대로 컬럼명 직접 지정 (76개)
+# 중복 컬럼은 위치 기반 구분 (평가액, 납입누계, 수익금 등)
+CSV_COLUMNS = [
     "날짜",
     "자산_USD", "부채_USD", "순자산_USD",
     "순자산YTD_USD", "순자산YTD_PCT",
@@ -79,149 +79,142 @@ raw.columns = [
     "은미IRP_납입누계", "은미IRP_수익금",
 ]
 
-# DB 컬럼 매핑 (CSV 컬럼명 -> DB 컬럼명)
-COL_MAP = {
-    "날짜":                   "date",
-    "환율":                   "exchange_rate",
-
-    # USD
-    "자산_USD":               "total_assets_usd",
-    "부채_USD":               "total_debt_usd",
-    "순자산_USD":               "net_assets_usd",
-    "순자산YTD_USD":           "net_assets_ytd_usd",
-    "순자산YTD_PCT":           "net_assets_ytd_pct",
-
-    # 자산/부채/순자산 합계
-    "자산":                   "total_assets",
-    "부채":                   "total_debt",
-    "순자산":                  "net_assets",
-
-    # 유동/비유동
-    "유동자산":                "liquid_assets",
-    "비유동자산":               "illiquid_assets",
-    "유동자산_비중":            "liquid_ratio",
-    "비유동자산_비중":           "illiquid_ratio",
-    "유동순자산":               "liquid_net_assets",
-
-    # 금융/실물
-    "금융자산":                "financial_assets",
-    "실물자산":                "real_assets",
-    "금융자산_비중":            "fin_asset_ratio",
-    "실물자산_비중":            "real_asset_ratio",
-    "금융순자산":               "fin_net_assets",
-    "금융순자산YTD":            "fin_net_assets_ytd",
-
-    # 현금/주식/코인 합산
-    "유동금융자산":             "financial_assets",  # 수정: 유동금융자산(현금+주식+코인)
-    "현금성자산":               "cash_assets",
-    "현금성자산_비중":           "cash_ratio",
-    "주식":                   "stock_assets",
-    "주식_비중":               "stock_ratio",
-    "코인":                   "coin_assets",
-    "코인_비중":               "coin_ratio",
-
-    # 기초 입력 항목 (준민/은미)
-    "준민_현금":               "jm_cash",
+# CSV 컬럼 -> DB 컬럼 매핑 (raw input만)
+# 파생 지표는 절대 매핑하지 않음 — calc_derived가 모두 재계산함.
+RAW_INPUT_MAP = {
+    "환율":                     "exchange_rate",
+    # 현금성 자산
+    "준민_현금":                "jm_cash",
     "준민_주택청약":            "jm_subscription",
-    "은미_현금":               "em_cash",
+    "은미_현금":                "em_cash",
     "은미_주택청약":            "em_subscription",
-    "준민_주식":               "jm_stock_value",
-    "준민_주식_평가액":          "jm_stock_pnl",
-    "은미_주식":               "em_stock_value",
-    "은미_주식_평가액":          "em_stock_pnl",
+    # 주식
+    "준민_주식":                "jm_stock_value",
+    "준민_주식_평가액":         "jm_stock_pnl",
+    "은미_주식":                "em_stock_value",
+    "은미_주식_평가액":         "em_stock_pnl",
+    # 코인
+    "코인":                     "coin_assets",
     "코인_총매수":              "coin_total_buy",
-    "코인_현금":               "coin_cash",
-    "부동산":                  "real_estate",
-
-    # 실물자산 수익률
-    "실물자산_ROE":            "real_asset_roe",
-    "실물자산_CAGR":           "real_asset_cagr",
-    "실물자산_YTD_KRW":        "real_asset_ytd",
-    "실물자산_YTD_PCT":        "real_asset_ytd_pct",
-
-    # 부채
-    "금융부채":                "fin_debt",
+    "코인_현금":                "coin_cash",
+    # 실물
+    "부동산":                   "real_estate",
+    # 금융부채
     "준민_금융부채":            "jm_fin_debt",
     "동금씨_투자금":            "donggum_invest",
     "은미_금융부채":            "em_fin_debt",
-    "카드값":                  "card_debt",
-    "실물부채":                "real_debt",
-    "부채_비율":               "debt_ratio",
-
+    "카드값":                   "card_debt",
+    # 실물부채
+    "실물부채":                 "real_debt",
     # 연금
-    "교직원공제회":             "teachers_mutual",
-    "교직원공제회_원금":         "teachers_mutual_principal",
-    "교직원공제회_부가금":        "teachers_mutual_bonus",
-    "준민연금저축_납입누계":      "jm_pension_principal",
-    "준민연금저축_수익금":        "jm_pension_profit",
-    "은미연금저축_납입누계":      "em_pension_principal",
-    "은미연금저축_수익금":        "em_pension_profit",
-    "준민IRP_납입누계":          "jm_irp_principal",
-    "준민IRP_수익금":            "jm_irp_profit",
-    "은미IRP_납입누계":          "em_irp_principal",
-    "은미IRP_수익금":            "em_irp_profit",
+    "교직원공제회_원금":        "teachers_mutual_principal",
+    "교직원공제회_부가금":      "teachers_mutual_bonus",
+    "준민연금저축_납입누계":    "jm_pension_principal",
+    "준민연금저축_수익금":      "jm_pension_profit",
+    "은미연금저축_납입누계":    "em_pension_principal",
+    "은미연금저축_수익금":      "em_pension_profit",
+    "준민IRP_납입누계":         "jm_irp_principal",
+    "준민IRP_수익금":           "jm_irp_profit",
+    "은미IRP_납입누계":         "em_irp_principal",
+    "은미IRP_수익금":           "em_irp_profit",
 }
 
+
 def safe_num(v):
-    if v is None: return None
-    if isinstance(v, float) and math.isnan(v): return None
+    if v is None:
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
     try:
-        # 달러($), 원화(₩), 쉼표, 퍼센트 기호 제거 및 양옆 공백 제거
         s = str(v).replace(",", "").replace("%", "").replace("$", "").replace("₩", "").strip()
-
-        if s in ("", "-", "—", "N/A", "#N/A", "nan"): return None
-
-        # 괄호로 묶인 음수 처리: (123) -> -123
+        if s in ("", "-", "—", "N/A", "#N/A", "nan"):
+            return None
+        # 괄호 음수: (123) -> -123
         if s.startswith("(") and s.endswith(")"):
             s = "-" + s[1:-1]
-
         return float(s)
-    except:
+    except Exception:
         return None
+
 
 def parse_date(v):
     try:
         return pd.to_datetime(str(v)).strftime("%Y-%m-%d")
-    except:
+    except Exception:
         return None
 
-# 업로드
-print("Supabase 업로드 중...\n")
-success, fail = 0, 0
 
-for _, row in raw.iterrows():
-    record = {}
-    for csv_col, db_col in COL_MAP.items():
+# ── CSV 로드 ──────────────────────────────────────────────────────
+print(f"CSV 읽는 중: {CSV_FILE}")
+try:
+    raw = pd.read_csv(CSV_FILE, encoding="utf-8-sig", header=0)
+except UnicodeDecodeError:
+    raw = pd.read_csv(CSV_FILE, encoding="cp949", header=0)
+
+print(f"  -> {len(raw)}행, {len(raw.columns)}열 발견")
+
+if len(raw.columns) != len(CSV_COLUMNS):
+    print(f"  ⚠ 컬럼 수 불일치 (기대 {len(CSV_COLUMNS)}, 실제 {len(raw.columns)}) — 위치 기반 매핑이 어긋날 수 있음")
+
+raw.columns = CSV_COLUMNS[:len(raw.columns)]
+
+
+# ── 행 → raw input 레코드 추출 ────────────────────────────────────
+def extract_raw(row) -> dict:
+    rec = {}
+    # 날짜
+    d = parse_date(row.get("날짜"))
+    if not d:
+        return {}
+    rec["date"] = d
+    rec["reference_month"] = d[:7] + "-01"
+    # raw input 컬럼들
+    for csv_col, db_col in RAW_INPUT_MAP.items():
         if csv_col not in row.index:
             continue
-        val = row[csv_col]
-        if db_col == "date":
-            parsed = parse_date(val)
-            if parsed:
-                record["date"] = parsed
-                # reference_month = 해당 월의 1일 (YTD 기준월)
-                record["reference_month"] = parsed[:7] + "-01"
-        else:
-            num = safe_num(val)
-            if num is not None:
-                record[db_col] = num
+        num = safe_num(row[csv_col])
+        if num is not None:
+            rec[db_col] = num
+    return rec
 
-    if "date" not in record:
-        fail += 1
-        continue
+
+# ── 처리: 날짜순 정렬 후 누적 df_all 로 YTD 계산 ──────────────────
+records = []
+for _, row in raw.iterrows():
+    rec = extract_raw(row)
+    if rec:
+        records.append(rec)
+
+records.sort(key=lambda r: r["date"])
+print(f"  -> 유효 행: {len(records)}개\n")
+
+print("Supabase 업로드 중...\n")
+success, fail = 0, 0
+processed_full = []  # 누적 (raw + derived) 레코드 — YTD 기준 계산용
+
+for rec in records:
+    # 누적 데이터를 df_all 로 변환 (calc_derived가 reference_month 컬럼 기대)
+    df_all = None
+    if processed_full:
+        df_all = pd.DataFrame(processed_full)
+        df_all["reference_month"] = pd.to_datetime(df_all["reference_month"])
+
+    derived = calc_derived(rec, df_all)
+    full = {**rec, **derived}
 
     resp = requests.post(
         API_URL,
         headers=HEADERS,
-        data=json.dumps(record),
+        data=json.dumps(full),
         params={"on_conflict": "date"},
     )
 
-    if resp.status_code in (200, 201):
-        print(f"  OK {record['date']}")
+    if resp.status_code in (200, 201, 204):
+        print(f"  OK {rec['date']}")
         success += 1
+        processed_full.append(full)
     else:
-        print(f"  FAIL {record.get('date','?')}: {resp.status_code} {resp.text[:200]}")
+        print(f"  FAIL {rec['date']}: {resp.status_code} {resp.text[:200]}")
         fail += 1
 
 print(f"\n완료! 성공: {success}건 / 실패: {fail}건")
