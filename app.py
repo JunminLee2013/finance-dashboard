@@ -5,7 +5,48 @@ from plotly.subplots import make_subplots
 from supabase import create_client, Client
 from datetime import datetime, date
 import math
+import ast
+import operator as _op
 from derived import calc_derived
+
+# ── 수식/숫자 입력 파서 ─────────────────────────────────────────────
+# 엑셀처럼 "=1+2*3" 형태의 수식과 일반 숫자("1234", "1,234.5") 둘 다 지원.
+# eval() 대신 ast 기반 화이트리스트 평가로 안전하게 처리.
+_SAFE_OPS = {
+    ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
+    ast.Div: _op.truediv, ast.Mod: _op.mod, ast.Pow: _op.pow,
+    ast.FloorDiv: _op.floordiv, ast.USub: _op.neg, ast.UAdd: _op.pos,
+}
+
+def _safe_eval(node):
+    if isinstance(node, ast.Expression):
+        return _safe_eval(node.body)
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPS:
+        return _SAFE_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPS:
+        return _SAFE_OPS[type(node.op)](_safe_eval(node.operand))
+    raise ValueError("허용되지 않은 식")
+
+def parse_num_or_formula(s, default=0.0):
+    """반환: (값:float, 에러메시지:str|None, 수식여부:bool)"""
+    if s is None:
+        return float(default), None, False
+    text = str(s).strip()
+    if text == "":
+        return float(default), None, False
+    is_formula = text.startswith("=")
+    expr = text[1:] if is_formula else text
+    expr = expr.replace(",", "")
+    try:
+        if is_formula:
+            val = _safe_eval(ast.parse(expr, mode="eval"))
+        else:
+            val = float(expr)
+        return float(val), None, is_formula
+    except Exception as e:
+        return float(default), f"{e}", is_formula
 
 def require_auth():
     if st.session_state.get("authenticated"):
@@ -404,6 +445,29 @@ elif page == "📝 데이터 입력":
 
     inp = {}
 
+    def num_or_formula_input(label, default, key):
+        """엑셀처럼 =1+2 수식 또는 일반 숫자를 받는 입력 위젯."""
+        def _fmt(v):
+            try:
+                f = float(v)
+                return f"{int(f)}" if f.is_integer() else f"{f:g}"
+            except Exception:
+                return "0"
+        raw = st.text_input(label, value=_fmt(default), key=f"inp_{key}",
+                            help="숫자 또는 =1+2*3 형태의 수식 입력 가능")
+        val, err, is_formula = parse_num_or_formula(raw, default)
+        if err:
+            st.markdown(
+                f"<div style='color:#cf222e;font-size:11px;margin-top:-14px'>⚠ 수식 오류</div>",
+                unsafe_allow_html=True,
+            )
+        elif is_formula:
+            st.markdown(
+                f"<div style='color:#0969da;font-size:11px;margin-top:-14px'>= {val:,.0f}</div>",
+                unsafe_allow_html=True,
+            )
+        return val
+
     # ─── 기본 정보 ───────────────────────────────────────────
     st.markdown("### 📅 기본 정보")
     _last_ref = last.get("reference_month")
@@ -419,7 +483,8 @@ elif page == "📝 데이터 입력":
     inp["date"]            = date.today().strftime("%Y-%m-%d")
     _exr_label   = "환율 (₩/$) 🔄자동" if auto_exr else "환율 (₩/$)"
     _exr_default = float(auto_exr) if auto_exr else dv("exchange_rate", 1300)
-    inp["exchange_rate"] = ci3.number_input(_exr_label, value=_exr_default, step=1.0, format="%g")
+    with ci3:
+        inp["exchange_rate"] = num_or_formula_input(_exr_label, _exr_default, "exchange_rate")
 
     # ─── 나머지 항목 ─────────────────────────────────────────
     for group_name, fields in GROUPS:
@@ -428,7 +493,7 @@ elif page == "📝 데이터 입력":
         cols  = st.columns(ncols)
         for i, (key, _, default) in enumerate(fields):
             with cols[i % ncols]:
-                inp[key] = st.number_input(LABELS.get(key, key), value=default, step=10000.0, format="%g")
+                inp[key] = num_or_formula_input(LABELS.get(key, key), default, key)
                 delta = inp[key] - dv(key)
                 if delta != 0:
                     color = "#1a7f37" if delta >= 0 else "#cf222e"
