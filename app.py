@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -211,6 +212,9 @@ def fetch_exchange_rate():
     return None
 
 # ── 사이드바 ──────────────────────────────────────────────────────
+if "prev_page" not in st.session_state:
+    st.session_state.prev_page = None
+
 with st.sidebar:
     st.markdown("## 💰 재무 대시보드!")
     st.markdown("---")
@@ -221,6 +225,16 @@ with st.sidebar:
         st.cache_data.clear(); st.rerun()
     st.markdown(f"<div style='color:#57606a;font-size:11px'>{datetime.now().strftime('%Y-%m-%d %H:%M')} 기준</div>",
                 unsafe_allow_html=True)
+
+# 페이지가 바뀌면 사이드바 자동 닫기
+if st.session_state.prev_page is not None and st.session_state.prev_page != page:
+    components.html("""
+    <script>
+        var btn = window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]');
+        if (btn) btn.click();
+    </script>
+    """, height=0)
+st.session_state.prev_page = page
 
 df = load_data()
 
