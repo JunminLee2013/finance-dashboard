@@ -172,6 +172,54 @@ def latest_snapshot(account_id: int) -> dict | None:
     return get_snapshot(account_id, dates[0])
 
 
+def list_snapshots_full(account_id: int) -> list[dict]:
+    """모든 스냅샷 + 아이템을 한 번에 로딩 (스냅샷 날짜 오름차순).
+
+    반환: [{id, snapshot_date, cash_balance,
+            items: [{security_id, code, name, market, quantity, price}, ...]}, ...]
+    """
+    sb = _client()
+    snap_res = (
+        sb.table("pf_snapshots")
+        .select("id, snapshot_date, cash_balance")
+        .eq("account_id", account_id)
+        .order("snapshot_date")
+        .execute()
+    )
+    snaps = snap_res.data or []
+    if not snaps:
+        return []
+    snap_ids = [s["id"] for s in snaps]
+    items_res = (
+        sb.table("pf_snapshot_items")
+        .select("snapshot_id, security_id, quantity, price, pf_securities(code, name, market)")
+        .in_("snapshot_id", snap_ids)
+        .execute()
+    )
+    by_snap: dict[int, list[dict]] = {}
+    for r in items_res.data or []:
+        sec = r.get("pf_securities") or {}
+        by_snap.setdefault(r["snapshot_id"], []).append(
+            {
+                "security_id": r["security_id"],
+                "code": sec.get("code"),
+                "name": sec.get("name"),
+                "market": sec.get("market"),
+                "quantity": int(r["quantity"] or 0),
+                "price": float(r["price"] or 0),
+            }
+        )
+    return [
+        {
+            "id": s["id"],
+            "snapshot_date": date.fromisoformat(s["snapshot_date"]),
+            "cash_balance": float(s["cash_balance"] or 0),
+            "items": by_snap.get(s["id"], []),
+        }
+        for s in snaps
+    ]
+
+
 def save_snapshot(
     account_id: int,
     snapshot_date: date,
