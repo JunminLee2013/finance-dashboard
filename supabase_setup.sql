@@ -202,3 +202,21 @@ COMMENT ON TABLE public.pf_securities        IS '종목 마스터 (코드/이름
 COMMENT ON TABLE public.pf_account_securities IS '계좌×종목 타겟 비중 (0..1, 잔여=현금)';
 COMMENT ON TABLE public.pf_snapshots         IS '계좌별 날짜 스냅샷 (예수금)';
 COMMENT ON TABLE public.pf_snapshot_items    IS '스냅샷 시점 종목 보유수량/가격';
+
+-- ================================================================
+-- Data API 접근 권한 (2026-05-30 Supabase 정책 변경 대응)
+-- anon  : anon key 로 접근하는 클라이언트 (supabase-js 기본)
+-- authenticated : 로그인된 사용자
+-- ================================================================
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.finance_monthly       TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pf_accounts           TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pf_securities         TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pf_account_securities TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pf_snapshots          TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pf_snapshot_items     TO anon, authenticated;
+
+-- BIGSERIAL 시퀀스 INSERT 권한
+GRANT USAGE, SELECT ON SEQUENCE public.finance_monthly_id_seq       TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.pf_accounts_id_seq           TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.pf_securities_id_seq         TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.pf_snapshots_id_seq          TO anon, authenticated;
