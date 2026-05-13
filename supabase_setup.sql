@@ -150,3 +150,55 @@ COMMENT ON TABLE public.finance_monthly IS '월별 재무상태표 - 개인 자�
 -- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS em_card_debt NUMERIC DEFAULT 0;
 -- UPDATE public.finance_monthly SET jm_card_debt = COALESCE(card_debt, 0) WHERE card_debt IS NOT NULL;
 -- ALTER TABLE public.finance_monthly DROP COLUMN card_debt;
+
+-- ================================================================
+-- 포트폴리오 리밸런싱 시스템
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS public.pf_accounts (
+    id          BIGSERIAL PRIMARY KEY,
+    name        TEXT UNIQUE NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pf_securities (
+    id          BIGSERIAL PRIMARY KEY,
+    code        TEXT UNIQUE NOT NULL,                       -- 종목코드 (예: '069500')
+    name        TEXT NOT NULL,                              -- 종목명 (예: 'KODEX 200')
+    market      CHAR(2) NOT NULL CHECK (market IN ('KS','KQ')),
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pf_account_securities (
+    account_id      BIGINT NOT NULL REFERENCES public.pf_accounts(id) ON DELETE CASCADE,
+    security_id     BIGINT NOT NULL REFERENCES public.pf_securities(id) ON DELETE RESTRICT,
+    target_weight   NUMERIC(6,4) NOT NULL CHECK (target_weight >= 0 AND target_weight <= 1),
+    display_order   INT DEFAULT 0,
+    PRIMARY KEY (account_id, security_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.pf_snapshots (
+    id              BIGSERIAL PRIMARY KEY,
+    account_id      BIGINT NOT NULL REFERENCES public.pf_accounts(id) ON DELETE CASCADE,
+    snapshot_date   DATE NOT NULL,
+    cash_balance    NUMERIC(16,2) DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (account_id, snapshot_date)
+);
+
+CREATE TABLE IF NOT EXISTS public.pf_snapshot_items (
+    snapshot_id  BIGINT NOT NULL REFERENCES public.pf_snapshots(id) ON DELETE CASCADE,
+    security_id  BIGINT NOT NULL REFERENCES public.pf_securities(id),
+    quantity     INT NOT NULL DEFAULT 0,
+    price        NUMERIC(14,2) NOT NULL,
+    PRIMARY KEY (snapshot_id, security_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pf_snapshots_account_date_desc
+    ON public.pf_snapshots (account_id, snapshot_date DESC);
+
+COMMENT ON TABLE public.pf_accounts          IS '포트폴리오 계좌';
+COMMENT ON TABLE public.pf_securities        IS '종목 마스터 (코드/이름/시장)';
+COMMENT ON TABLE public.pf_account_securities IS '계좌×종목 타겟 비중 (0..1, 잔여=현금)';
+COMMENT ON TABLE public.pf_snapshots         IS '계좌별 날짜 스냅샷 (예수금)';
+COMMENT ON TABLE public.pf_snapshot_items    IS '스냅샷 시점 종목 보유수량/가격';
