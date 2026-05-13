@@ -4,3 +4,4 @@ __pycache__/
 .env
 .DS_Store
 data.csv
+portfolio_export.csv
