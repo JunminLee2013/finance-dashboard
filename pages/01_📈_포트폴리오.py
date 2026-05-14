@@ -14,6 +14,7 @@ from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from portfolio import db, prices, rebalance
@@ -135,8 +136,8 @@ else:
     st.session_state["pf_selected_account"] = selected_name
     selected_account = next(a for a in accounts if a["name"] == selected_name)
 
-tab_reb, tab_now, tab_hist, tab_admin = st.tabs(
-    ["⚖️ 리밸런싱", "📊 현재 비중", "📅 과거 스냅샷", "⚙️ 관리"]
+tab_reb, tab_now, tab_hist, tab_trend, tab_admin = st.tabs(
+    ["⚖️ 리밸런싱", "📊 현재 비중", "📅 과거 스냅샷", "📈 추이", "⚙️ 관리"]
 )
 
 
@@ -433,6 +434,143 @@ with tab_hist:
                         db.delete_snapshot(acct_id, sel)
                         st.success(f"{sel} 삭제 완료.")
                         st.rerun()
+
+
+# =================================================================
+# 📈 추이 (Pre/Post 비중 시계열)
+# =================================================================
+with tab_trend:
+    if not selected_account:
+        st.info("계좌를 먼저 생성하세요.")
+    else:
+        acct_id = selected_account["id"]
+        snapshots = db.list_snapshots_full(acct_id)
+        holdings_meta = db.get_account_securities(acct_id)
+        target_map = {h["security_id"]: h["target_weight"] for h in holdings_meta}
+
+        if not snapshots:
+            st.info("저장된 스냅샷이 없습니다.")
+        elif len(snapshots) < 2:
+            st.info("추이 비교를 위해 최소 2개 이상의 스냅샷이 필요합니다.")
+        else:
+            rows_w = rebalance.compute_pre_post_weights(snapshots)
+            wdf = pd.DataFrame(rows_w)
+            wdf["snapshot_date"] = pd.to_datetime(wdf["snapshot_date"])
+
+            # 같은 날짜 두 점을 시각적으로 분리: pre 는 -12h, post 는 +12h
+            offset = pd.Timedelta(hours=12)
+            wdf["x"] = wdf.apply(
+                lambda r: r["snapshot_date"] + (-offset if r["kind"] == "pre" else offset),
+                axis=1,
+            )
+
+            # 종목 순서/색상 — display_order 기준, 그 뒤에 holdings_meta 에 없는 종목, 마지막에 현금
+            order_sids: list[int] = []
+            seen: set[int] = set()
+            for h in holdings_meta:
+                if h["security_id"] in target_map:
+                    order_sids.append(h["security_id"])
+                    seen.add(h["security_id"])
+            for sid in wdf["security_id"].unique():
+                if sid == rebalance.CASH_SID or sid in seen:
+                    continue
+                order_sids.append(int(sid))
+                seen.add(int(sid))
+            order_sids.append(rebalance.CASH_SID)  # 현금 마지막
+
+            palette = ["#0969da", "#1a7f37", "#bf8700", "#8250df", "#cf222e",
+                       "#0550ae", "#2da44e", "#d29922", "#bc8cff", "#fa4549"]
+            color_map: dict[int, str] = {}
+            for i, sid in enumerate(s for s in order_sids if s != rebalance.CASH_SID):
+                color_map[sid] = palette[i % len(palette)]
+            color_map[rebalance.CASH_SID] = "#8c959f"
+
+            label_for: dict[int, str] = (
+                wdf.drop_duplicates("security_id").set_index("security_id")["label"].to_dict()
+            )
+
+            # ── 차트 1: Pre/Post 비중 stacked area ──────────────────
+            st.markdown("##### 종목 비중 추이 (Pre / Post)")
+            area = go.Figure()
+            for sid in order_sids:
+                sub = wdf[wdf["security_id"] == sid].sort_values("x")
+                if sub.empty:
+                    continue
+                lbl = label_for.get(sid, "?") if sid != rebalance.CASH_SID else "현금"
+                cdata = [
+                    [("pre" if k == "pre" else "post"), str(pd.Timestamp(d).date())]
+                    for k, d in zip(sub["kind"], sub["snapshot_date"])
+                ]
+                area.add_trace(go.Scatter(
+                    x=sub["x"], y=sub["weight_pct"], name=lbl,
+                    stackgroup="one",
+                    line=dict(color=color_map[sid], width=1),
+                    customdata=cdata,
+                    hovertemplate=f"{lbl}: %{{y:.1f}}%<br>%{{customdata[0]}} @ %{{customdata[1]}}<extra></extra>",
+                ))
+            area.update_layout(
+                height=420, margin=dict(t=20, b=10, l=10, r=10),
+                yaxis=dict(title="비중 (%)", range=[0, 100], ticksuffix="%"),
+                hovermode="x unified",
+            )
+            st.plotly_chart(area, use_container_width=True)
+            st.caption(
+                "같은 날짜에 두 점: **pre** = 직전 스냅샷 수량 × 당일 스냅샷 가격 "
+                "(리밸런싱 직전, 보유기간 동안 가격 변동으로 drift 된 비중). "
+                "**post** = 당일 수량 × 당일 가격 (리밸런싱 직후 실제 비중). "
+                "두 점 사이의 수직 점프 = 리밸런싱 효과, 스냅샷 사이의 경사 = 보유기간 가격 drift."
+            )
+
+            # ── 차트 2: 종목별 small multiples ──────────────────────
+            st.markdown("##### 종목별 비중 (Small Multiples)")
+            chart_sids = [sid for sid in order_sids if sid != rebalance.CASH_SID]
+            if chart_sids:
+                n = len(chart_sids)
+                ncols = 2 if n > 1 else 1
+                nrows = (n + ncols - 1) // ncols
+                sm = make_subplots(
+                    rows=nrows, cols=ncols,
+                    subplot_titles=[label_for.get(sid, "?") for sid in chart_sids],
+                    vertical_spacing=0.12, horizontal_spacing=0.08,
+                )
+                for i, sid in enumerate(chart_sids):
+                    r = i // ncols + 1
+                    c = i % ncols + 1
+                    sub = wdf[wdf["security_id"] == sid].sort_values("snapshot_date")
+                    sub_post = sub[sub["kind"] == "post"]
+                    sub_pre  = sub[sub["kind"] == "pre"]
+                    clr = color_map[sid]
+                    if not sub_post.empty:
+                        sm.add_trace(go.Scatter(
+                            x=sub_post["snapshot_date"], y=sub_post["weight_pct"],
+                            name="post", legendgroup="post", showlegend=(i == 0),
+                            mode="lines+markers",
+                            line=dict(color=clr, width=2),
+                            marker=dict(size=6),
+                        ), row=r, col=c)
+                    if not sub_pre.empty:
+                        sm.add_trace(go.Scatter(
+                            x=sub_pre["snapshot_date"], y=sub_pre["weight_pct"],
+                            name="pre", legendgroup="pre", showlegend=(i == 0),
+                            mode="lines+markers",
+                            line=dict(color=clr, width=1, dash="dot"),
+                            marker=dict(size=5, symbol="circle-open"),
+                        ), row=r, col=c)
+                    tgt_pct = float(target_map.get(sid, 0)) * 100
+                    if tgt_pct > 0:
+                        sm.add_hline(
+                            y=tgt_pct, line=dict(color="#57606a", width=1, dash="dash"),
+                            row=r, col=c,
+                            annotation_text=f"target {tgt_pct:.1f}%",
+                            annotation_position="top right",
+                            annotation_font_size=10,
+                        )
+                    sm.update_yaxes(ticksuffix="%", row=r, col=c)
+                sm.update_layout(
+                    height=260 * nrows, margin=dict(t=40, b=10, l=10, r=10),
+                    hovermode="x",
+                )
+                st.plotly_chart(sm, use_container_width=True)
 
 
 # =================================================================
