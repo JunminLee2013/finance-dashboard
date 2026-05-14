@@ -247,37 +247,48 @@ with tab_reb:
                         "현재가": r.price,
                         "보유수량": r.current_qty,
                         "목표비중(%)": r.target_weight * 100,
-                        "목표평가액": r.target_value,
+                        "추천 매수·매도": r.delta_qty,
                         "목표수량": r.target_qty,
-                        "매수·매도": r.delta_qty,
-                        "매수후평가액": r.projected_value,
-                        "매수후비중(%)": r.projected_weight * 100,
+                        "체결수량": r.target_qty,
                     }
                     for r in rows
                 ]
             )
 
-            st.markdown("##### 리밸런싱 결과")
-            st.dataframe(
+            st.markdown("##### 리밸런싱 결과 — 체결수량 입력 후 저장")
+            st.caption("**체결수량** 컬럼이 실제 매매 수량입니다. 기본값은 목표수량이며, "
+                       "더 사거나 덜 산 경우 직접 수정하세요. 잔여현금/실제 비중은 자동 재계산됩니다.")
+            edited = st.data_editor(
                 df,
                 hide_index=True,
                 use_container_width=True,
+                disabled=["종목명", "코드", "현재가", "보유수량",
+                          "목표비중(%)", "추천 매수·매도", "목표수량"],
                 column_config={
                     "현재가": st.column_config.NumberColumn(format="₩%.0f"),
                     "목표비중(%)": st.column_config.NumberColumn(format="%.2f"),
-                    "매수후비중(%)": st.column_config.NumberColumn(format="%.2f"),
-                    "목표평가액": st.column_config.NumberColumn(format="₩%.0f"),
-                    "매수후평가액": st.column_config.NumberColumn(format="₩%.0f"),
+                    "체결수량": st.column_config.NumberColumn(min_value=0, step=1),
                 },
+                key=f"pf_edit_rows_{acct_id}",
             )
+
+            # 체결수량 기준 실제 평가액/잔여현금 재계산 (rows 순서와 edited 순서 일치 가정)
+            actual_qty: dict[int, int] = {}
+            actual_invested = 0.0
+            for r, (_, erow) in zip(rows, edited.iterrows()):
+                q = int(erow["체결수량"] or 0)
+                actual_qty[r.security_id] = q
+                actual_invested += q * r.price
+            actual_cash = total_value - actual_invested
+            actual_total = actual_invested + max(actual_cash, 0.0)
 
             mc1, mc2, mc3 = st.columns(3)
             mc1.metric("입력 총가치", fmt_krw(total_value))
-            mc2.metric("예상 잔여현금", fmt_krw(expected_cash),
-                       delta=f"target {fmt_pct(cash_target)}")
-            mc3.metric("주식 투자액", fmt_krw(total_value - expected_cash))
-            if expected_cash < 0:
-                st.warning("예상 잔여현금이 음수입니다. 입력 총가치를 확인하거나 타겟 비중 합이 100%를 초과했는지 확인하세요.")
+            mc2.metric("실제 잔여현금", fmt_krw(actual_cash),
+                       delta=f"추천 {fmt_krw(expected_cash)}")
+            mc3.metric("주식 투자액", fmt_krw(actual_invested))
+            if actual_cash < 0:
+                st.warning("체결수량 합이 입력 총가치를 초과합니다. 총가치 또는 체결수량을 확인하세요.")
 
             st.markdown("---")
             save_date = st.date_input("스냅샷 날짜", value=date.today(), key=f"pf_save_date_{acct_id}")
@@ -285,12 +296,12 @@ with tab_reb:
                 f"`{save_date}` 날짜의 기존 스냅샷이 있다면 **덮어씁니다**. 진행 확인",
                 key=f"pf_save_confirm_{acct_id}",
             )
-            if st.button("💾 스냅샷으로 저장 (목표수량 기준)", disabled=not confirm,
+            if st.button("💾 스냅샷으로 저장 (체결수량 기준)", disabled=not confirm,
                          use_container_width=True, key=f"pf_save_btn_{acct_id}"):
                 items_payload = [
-                    (r.security_id, r.target_qty, r.price) for r in rows
+                    (r.security_id, actual_qty[r.security_id], r.price) for r in rows
                 ]
-                db.save_snapshot(acct_id, save_date, max(expected_cash, 0.0), items_payload)
+                db.save_snapshot(acct_id, save_date, max(actual_cash, 0.0), items_payload)
                 st.success(f"{save_date} 스냅샷 저장 완료.")
                 st.rerun()
 
