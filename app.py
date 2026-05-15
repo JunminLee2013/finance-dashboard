@@ -65,7 +65,7 @@ def require_auth():
 
 # ── 페이지 설정 ──────────────────────────────────────────────────
 st.set_page_config(
-    page_title="재무 대시보드!",
+    page_title="자산 관리",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -216,7 +216,7 @@ if "prev_page" not in st.session_state:
     st.session_state.prev_page = None
 
 with st.sidebar:
-    st.markdown("## 💰 재무 대시보드!")
+    st.markdown("## 💰 자산 관리")
     st.markdown("---")
     page = st.radio("메뉴", ["📊 대시보드", "📝 데이터 입력", "📋 데이터 관리", "📈 상세 분석"],
                     label_visibility="collapsed")
