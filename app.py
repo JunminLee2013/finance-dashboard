@@ -80,6 +80,17 @@ html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 .stApp { background: #f6f8fa; color: #24292f; }
 [data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #d0d7de; }
 
+/* 사이드바 첫 항목(메인 app.py)의 자동 생성 라벨 "app"을 "자산 관리"로 치환 */
+[data-testid="stSidebarNav"] ul li:first-child a span:not([data-testid]),
+[data-testid="stSidebarNav"] ul li:first-child a > div > span:last-child {
+    font-size: 0;
+}
+[data-testid="stSidebarNav"] ul li:first-child a span:not([data-testid])::after,
+[data-testid="stSidebarNav"] ul li:first-child a > div > span:last-child::after {
+    content: "자산 관리";
+    font-size: 0.875rem;
+}
+
 .metric-card {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 12px;
     padding: 18px 20px; position: relative; overflow: hidden; margin-bottom: 4px;

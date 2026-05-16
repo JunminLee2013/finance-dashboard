@@ -73,7 +73,7 @@ git push -u origin main
 3. 설정:
    - Repository: `YOUR_USERNAME/finance-dashboard`
    - Branch: `main`
-   - Main file path: `자산_관리.py`
+   - Main file path: `app.py`
 4. **Advanced settings** → **Secrets** 탭에 아래 내용 입력:
 
 ```toml
@@ -89,7 +89,7 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 ```
 finance-dashboard/
-├── 자산_관리.py                       # 메인 Streamlit 앱 (자산 관리 섹션)
+├── app.py                           # 메인 Streamlit 앱
 ├── migrate.py                       # 구글 시트 → Supabase 마이그레이션
 ├── supabase_setup.sql               # DB 테이블 생성 SQL
 ├── requirements.txt                 # Python 패키지
