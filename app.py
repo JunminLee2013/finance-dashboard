@@ -9,6 +9,7 @@ import math
 import ast
 import operator as _op
 from derived import calc_derived
+import _nav_label
 
 # ── 수식/숫자 입력 파서 ─────────────────────────────────────────────
 # 엑셀처럼 "=1+2*3" 형태의 수식과 일반 숫자("1234", "1,234.5") 둘 다 지원.
@@ -70,6 +71,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+_nav_label.apply()
 
 # ── 스타일 ────────────────────────────────────────────────────────
 st.markdown("""
@@ -79,17 +81,6 @@ st.markdown("""
 html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 .stApp { background: #f6f8fa; color: #24292f; }
 [data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #d0d7de; }
-
-/* 사이드바 첫 항목(메인 app.py)의 자동 생성 라벨 "app"을 "자산 관리"로 치환 */
-[data-testid="stSidebarNav"] ul li:first-child a span:not([data-testid]),
-[data-testid="stSidebarNav"] ul li:first-child a > div > span:last-child {
-    font-size: 0;
-}
-[data-testid="stSidebarNav"] ul li:first-child a span:not([data-testid])::after,
-[data-testid="stSidebarNav"] ul li:first-child a > div > span:last-child::after {
-    content: "자산 관리";
-    font-size: 0.875rem;
-}
 
 .metric-card {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 12px;

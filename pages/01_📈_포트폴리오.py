@@ -18,10 +18,12 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from portfolio import db, prices, rebalance
+import _nav_label
 
 
 # ── 페이지 설정 ──────────────────────────────────────────────────
 st.set_page_config(page_title="포트폴리오", page_icon="📈", layout="wide")
+_nav_label.apply()
 
 # 공통 스타일 (app.py 와 비슷한 톤만 가볍게 적용)
 st.markdown(
