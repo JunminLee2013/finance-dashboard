@@ -192,8 +192,9 @@ LAYOUT = dict(
     font=dict(color="#57606a", family="Noto Sans KR"),
     xaxis=dict(gridcolor="#d0d7de", linecolor="#d0d7de"),
     yaxis=dict(gridcolor="#d0d7de", linecolor="#d0d7de"),
-    legend=dict(bgcolor="#ffffff", bordercolor="#d0d7de", borderwidth=1),
-    margin=dict(l=0, r=0, t=40, b=0), hovermode="x unified",
+    legend=dict(bgcolor="#ffffff", bordercolor="#d0d7de", borderwidth=1,
+                orientation="h", yanchor="top", y=-0.18, xanchor="left", x=0),
+    margin=dict(l=0, r=0, t=40, b=60), hovermode="x unified",
 )
 
 def _add_markers(fig):
