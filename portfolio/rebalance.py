@@ -99,6 +99,95 @@ def compute_current_weights(
 CASH_SID = 0
 
 
+def compute_combined_portfolio(accounts_data: list[dict]) -> dict:
+    """여러 계좌를 하나로 합산한 포트폴리오의 현재/타겟 비중 계산.
+
+    각 종목의 합산 현재비중 = Σ(계좌별 평가액) / Σ(전체 평가액)
+    각 종목의 합산 타겟비중 = Σ(계좌 평가액 × 해당 계좌 타겟비중) / Σ(전체 평가액)
+
+    즉 계좌별 평가액으로 가중한 타겟비중. 동일 종목이 여러 계좌에 있으면
+    security_id 기준으로 병합한다. 타겟 합이 100% 미만인 계좌의 잔여분은
+    현금 타겟으로 귀속된다.
+
+    accounts_data: 계좌별
+        {
+            "account_name": str,
+            "items": [{security_id, code, name, quantity, price}, ...],  # price=라이브가격
+            "cash_balance": float,
+            "targets": {security_id: target_weight(0..1), ...},
+        }
+
+    반환:
+        {
+            "rows": [{security_id, code, name, value, target_value,
+                      weight, target_weight}, ...],   # 종목별 합산 (현금 제외)
+            "cash": {value, target_value, weight, target_weight},
+            "grand_total": float,
+        }
+    """
+    cur_val: dict[int, float] = {}
+    tgt_val: dict[int, float] = {}
+    label: dict[int, dict] = {}
+    cash_cur = 0.0
+    cash_tgt = 0.0
+    grand_total = 0.0
+
+    for acct in accounts_data:
+        items = acct.get("items") or []
+        targets = acct.get("targets") or {}
+        cash = float(acct.get("cash_balance") or 0)
+
+        # 계좌 평가액 = Σ(수량 × 가격) + 예수금
+        sids: set[int] = set(targets.keys())
+        item_val: dict[int, float] = {}
+        for it in items:
+            sid = it["security_id"]
+            v = float(it.get("price", 0) or 0) * int(it.get("quantity", 0) or 0)
+            item_val[sid] = item_val.get(sid, 0.0) + v
+            sids.add(sid)
+            label.setdefault(sid, {"code": it.get("code"), "name": it.get("name")})
+        account_total = sum(item_val.values()) + cash
+        grand_total += account_total
+
+        # 현재 평가액 누적
+        for sid, v in item_val.items():
+            cur_val[sid] = cur_val.get(sid, 0.0) + v
+        cash_cur += cash
+
+        # 타겟 평가액 = 계좌 평가액 × 타겟비중 (현금 잔여분 포함)
+        tw_sum = 0.0
+        for sid, w in targets.items():
+            w = float(w or 0)
+            tw_sum += w
+            tgt_val[sid] = tgt_val.get(sid, 0.0) + account_total * w
+            label.setdefault(sid, {"code": None, "name": None})
+        cash_tgt += account_total * max(0.0, 1.0 - tw_sum)
+
+    rows = []
+    for sid in sorted(cur_val.keys() | tgt_val.keys()):
+        v = cur_val.get(sid, 0.0)
+        tv = tgt_val.get(sid, 0.0)
+        meta = label.get(sid, {})
+        rows.append({
+            "security_id": sid,
+            "code": meta.get("code"),
+            "name": meta.get("name") or meta.get("code") or f"#{sid}",
+            "value": v,
+            "target_value": tv,
+            "weight": (v / grand_total) if grand_total > 0 else 0.0,
+            "target_weight": (tv / grand_total) if grand_total > 0 else 0.0,
+        })
+    rows.sort(key=lambda r: r["value"], reverse=True)
+
+    cash_row = {
+        "value": cash_cur,
+        "target_value": cash_tgt,
+        "weight": (cash_cur / grand_total) if grand_total > 0 else 0.0,
+        "target_weight": (cash_tgt / grand_total) if grand_total > 0 else 0.0,
+    }
+    return {"rows": rows, "cash": cash_row, "grand_total": grand_total}
+
+
 def compute_pre_post_weights(snapshots: list[dict]) -> list[dict]:
     """스냅샷 시계열에서 종목(+현금)별 Pre/Post 비중을 계산.
 
