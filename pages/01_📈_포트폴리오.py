@@ -236,11 +236,19 @@ with tab_all:
 
             fig = go.Figure()
             fig.add_trace(go.Pie(labels=labels, values=cur_vals, hole=0.55, name="현재",
-                                 domain={"x": [0, 0.48]}, title="현재"))
+                                 domain={"x": [0, 0.48]}, title="현재",
+                                 textposition="inside", textinfo="percent",
+                                 insidetextorientation="horizontal"))
             fig.add_trace(go.Pie(labels=labels, values=tgt_vals, hole=0.55, name="타겟",
-                                 domain={"x": [0.52, 1]}, title="타겟"))
-            fig.update_layout(height=400, margin=dict(t=20, b=10, l=10, r=10),
-                              showlegend=True)
+                                 domain={"x": [0.52, 1]}, title="타겟",
+                                 textposition="inside", textinfo="percent",
+                                 insidetextorientation="horizontal"))
+            fig.update_layout(
+                height=520, margin=dict(t=30, b=10, l=10, r=10),
+                showlegend=True, uniformtext=dict(minsize=10, mode="hide"),
+                legend=dict(orientation="h", yanchor="top", y=-0.05,
+                            xanchor="center", x=0.5, font=dict(size=11)),
+            )
             st.plotly_chart(fig, use_container_width=True)
 
             # 드리프트 막대 (현금 제외)
@@ -487,11 +495,19 @@ with tab_now:
 
             fig = go.Figure()
             fig.add_trace(go.Pie(labels=labels, values=cur_vals, hole=0.55, name="현재",
-                                 domain={"x": [0, 0.48]}, title="현재"))
+                                 domain={"x": [0, 0.48]}, title="현재",
+                                 textposition="inside", textinfo="percent",
+                                 insidetextorientation="horizontal"))
             fig.add_trace(go.Pie(labels=labels, values=tgt_vals, hole=0.55, name="타겟",
-                                 domain={"x": [0.52, 1]}, title="타겟"))
-            fig.update_layout(height=380, margin=dict(t=20, b=10, l=10, r=10),
-                              showlegend=True)
+                                 domain={"x": [0.52, 1]}, title="타겟",
+                                 textposition="inside", textinfo="percent",
+                                 insidetextorientation="horizontal"))
+            fig.update_layout(
+                height=500, margin=dict(t=30, b=10, l=10, r=10),
+                showlegend=True, uniformtext=dict(minsize=10, mode="hide"),
+                legend=dict(orientation="h", yanchor="top", y=-0.05,
+                            xanchor="center", x=0.5, font=dict(size=11)),
+            )
             st.plotly_chart(fig, use_container_width=True)
 
             # 드리프트 막대
