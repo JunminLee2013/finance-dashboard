@@ -138,13 +138,14 @@ def compute_combined_portfolio(accounts_data: list[dict]) -> dict:
         cash = float(acct.get("cash_balance") or 0)
 
         # 계좌 평가액 = Σ(수량 × 가격) + 예수금
-        sids: set[int] = set(targets.keys())
         item_val: dict[int, float] = {}
         for it in items:
-            sid = it["security_id"]
+            sid = it.get("security_id")
+            if sid is None:
+                continue
+            sid = int(sid)
             v = float(it.get("price", 0) or 0) * int(it.get("quantity", 0) or 0)
             item_val[sid] = item_val.get(sid, 0.0) + v
-            sids.add(sid)
             label.setdefault(sid, {"code": it.get("code"), "name": it.get("name")})
         account_total = sum(item_val.values()) + cash
         grand_total += account_total
@@ -157,6 +158,9 @@ def compute_combined_portfolio(accounts_data: list[dict]) -> dict:
         # 타겟 평가액 = 계좌 평가액 × 타겟비중 (현금 잔여분 포함)
         tw_sum = 0.0
         for sid, w in targets.items():
+            if sid is None:
+                continue
+            sid = int(sid)
             w = float(w or 0)
             tw_sum += w
             tgt_val[sid] = tgt_val.get(sid, 0.0) + account_total * w
@@ -164,7 +168,7 @@ def compute_combined_portfolio(accounts_data: list[dict]) -> dict:
         cash_tgt += account_total * max(0.0, 1.0 - tw_sum)
 
     rows = []
-    for sid in sorted(cur_val.keys() | tgt_val.keys()):
+    for sid in sorted(int(s) for s in (cur_val.keys() | tgt_val.keys())):
         v = cur_val.get(sid, 0.0)
         tv = tgt_val.get(sid, 0.0)
         meta = label.get(sid, {})
