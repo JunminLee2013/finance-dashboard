@@ -672,6 +672,14 @@ elif page == "📈 상세 분석":
         with col:
             card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_pct(latest.get(rk))}", color=clr)
 
+    c1, c2, _, _, _ = st.columns(5)
+    for col, (lbl, vk, rk, clr) in zip([c1, c2], [
+        ("유동자산",   "liquid_assets",   "liquid_ratio",   "green"),
+        ("비유동자산", "illiquid_assets", "illiquid_ratio", "gold"),
+    ]):
+        with col:
+            card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_pct(latest.get(rk))}", color=clr)
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     # 차트 탭
