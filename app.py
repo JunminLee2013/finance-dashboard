@@ -665,21 +665,31 @@ elif page == "📈 상세 분석":
 
     # 자산 구성
     st.markdown('<div class="sec">자산 구성</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    for col, (lbl, vk, rk, clr) in zip([c1, c2, c3, c4], [
-        ("금융자산",   "financial_assets", "fin_asset_ratio",  "blue"),
-        ("실물자산",   "real_assets",      "real_asset_ratio", "gray"),
-        ("유동자산",   "liquid_assets",    "liquid_ratio",     "green"),
-        ("비유동자산", "illiquid_assets",  "illiquid_ratio",   "gold"),
+
+    st.caption("자산 분류 (합계 기준)")
+    c1, c2 = st.columns(2)
+    for col, (lbl, vk, rk, clr) in zip([c1, c2], [
+        ("금융자산", "financial_assets", "fin_asset_ratio",  "blue"),
+        ("실물자산", "real_assets",      "real_asset_ratio", "gray"),
     ]):
         with col:
             card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_ratio(latest.get(rk))}", color=clr)
 
-    c1, c2, c3, _ = st.columns(4)
+    st.caption("유동성 분류 (합계 기준)")
+    c1, c2 = st.columns(2)
+    for col, (lbl, vk, rk, clr) in zip([c1, c2], [
+        ("유동자산",   "liquid_assets",   "liquid_ratio",   "green"),
+        ("비유동자산", "illiquid_assets", "illiquid_ratio", "gold"),
+    ]):
+        with col:
+            card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_ratio(latest.get(rk))}", color=clr)
+
+    st.caption("금융자산 세부 (유동금융자산 기준)")
+    c1, c2, c3 = st.columns(3)
     for col, (lbl, vk, rk, clr) in zip([c1, c2, c3], [
-        ("현금성 자산", "cash_assets",   "cash_ratio",   "green"),
-        ("주식",       "stock_assets",  "stock_ratio",  "blue"),
-        ("코인",       "coin_assets",   "coin_ratio",   "gold"),
+        ("현금성 자산", "cash_assets",  "cash_ratio",  "green"),
+        ("주식",       "stock_assets", "stock_ratio", "blue"),
+        ("코인",       "coin_assets",  "coin_ratio",  "gold"),
     ]):
         with col:
             card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_ratio(latest.get(rk))}", color=clr)
