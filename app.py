@@ -166,6 +166,10 @@ def fmt_pct(v):
     if v is None or (isinstance(v, float) and math.isnan(v)): return "—"
     return f"{v:+.1f}%" if v != 0 else "0.0%"
 
+def fmt_ratio(v):
+    if v is None or (isinstance(v, float) and math.isnan(v)): return "—"
+    return f"{v:.1f}%"
+
 def delta_span(v, is_pct=False):
     if v is None or (isinstance(v, float) and math.isnan(v)): return ""
     fmt = f"{v:+.1f}%" if is_pct else fmt_krw(v)
@@ -661,24 +665,24 @@ elif page == "📈 상세 분석":
 
     # 자산 구성
     st.markdown('<div class="sec">자산 구성</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4, c5 = st.columns(5)
-    for col, (lbl, vk, rk, clr) in zip([c1,c2,c3,c4,c5], [
+    c1, c2, c3, c4 = st.columns(4)
+    for col, (lbl, vk, rk, clr) in zip([c1, c2, c3, c4], [
         ("금융자산",   "financial_assets", "fin_asset_ratio",  "blue"),
         ("실물자산",   "real_assets",      "real_asset_ratio", "gray"),
-        ("현금성 자산", "cash_assets",      "cash_ratio",       "green"),
-        ("주식",      "stock_assets",     "stock_ratio",      "blue"),
-        ("코인",      "coin_assets",      "coin_ratio",       "gold"),
+        ("유동자산",   "liquid_assets",    "liquid_ratio",     "green"),
+        ("비유동자산", "illiquid_assets",  "illiquid_ratio",   "gold"),
     ]):
         with col:
-            card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_pct(latest.get(rk))}", color=clr)
+            card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_ratio(latest.get(rk))}", color=clr)
 
-    c1, c2, _, _, _ = st.columns(5)
-    for col, (lbl, vk, rk, clr) in zip([c1, c2], [
-        ("유동자산",   "liquid_assets",   "liquid_ratio",   "green"),
-        ("비유동자산", "illiquid_assets", "illiquid_ratio", "gold"),
+    c1, c2, c3, _ = st.columns(4)
+    for col, (lbl, vk, rk, clr) in zip([c1, c2, c3], [
+        ("현금성 자산", "cash_assets",   "cash_ratio",   "green"),
+        ("주식",       "stock_assets",  "stock_ratio",  "blue"),
+        ("코인",       "coin_assets",   "coin_ratio",   "gold"),
     ]):
         with col:
-            card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_pct(latest.get(rk))}", color=clr)
+            card(lbl, fmt_krw(latest.get(vk)), sub=f"비중 {fmt_ratio(latest.get(rk))}", color=clr)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
