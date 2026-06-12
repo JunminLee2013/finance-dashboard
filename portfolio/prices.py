@@ -36,27 +36,61 @@ def _yfinance_current(code: str, market: str) -> float | None:
         return None
 
 
-def _naver_current(code: str) -> float | None:
-    """Naver Finance 모바일 JSON API로 KRX 상장 종목 현재가 조회."""
-    url = f"https://m.stock.naver.com/api/stock/{code}/basic"
+# 브라우저 수준 헤더. Naver 가 단순 UA 요청을 403/빈 응답으로 막는 경우가 잦아
+# 실제 브라우저와 동일한 형태로 보낸다.
+_NAVER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://m.stock.naver.com/",
+}
+
+
+def _naver_fetch_json(url: str) -> dict | None:
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        req = urllib.request.Request(url, headers=_NAVER_HEADERS)
         with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            return json.loads(resp.read().decode("utf-8"))
     except Exception:
         return None
-    # `closePrice` 가 표준 키 (예: "10,500"). 일부 응답은 `dealTrendInfos[0].closePrice`.
-    candidates = [data.get("closePrice")]
+
+
+def _extract_price(data: dict | None) -> float | None:
+    if not isinstance(data, dict):
+        return None
+    candidates: list = [data.get("closePrice"), data.get("tradePrice")]
     deals = data.get("dealTrendInfos") or []
-    if deals and isinstance(deals, list):
+    if isinstance(deals, list) and deals:
         candidates.append(deals[0].get("closePrice"))
+    # api.stock.naver.com/integration 형태: stockEndType 안에 close 가 들어옴
+    end = data.get("stockEndType") or {}
+    if isinstance(end, dict):
+        candidates.append(end.get("closePrice"))
     for s in candidates:
-        if not s:
+        if s in (None, ""):
             continue
         try:
             return float(str(s).replace(",", ""))
         except ValueError:
             continue
+    return None
+
+
+def _naver_current(code: str) -> float | None:
+    """Naver Finance JSON API 로 KRX 상장 종목 현재가 조회.
+
+    엔드포인트가 가끔 막히거나 응답 스키마가 바뀌어, 두 곳을 차례로 시도한다.
+    """
+    for url in (
+        f"https://m.stock.naver.com/api/stock/{code}/basic",
+        f"https://api.stock.naver.com/stock/{code}/integration",
+    ):
+        p = _extract_price(_naver_fetch_json(url))
+        if p is not None:
+            return p
     return None
 
 
