@@ -396,7 +396,7 @@ with tab_reb:
                 column_config={
                     "현재가": st.column_config.NumberColumn(format="₩%.0f"),
                     "목표비중(%)": st.column_config.NumberColumn(format="%.2f"),
-                    "체결수량": st.column_config.NumberColumn(min_value=0, step=1),
+                    "체결수량": st.column_config.NumberColumn(min_value=0, step=1, required=True),
                 },
                 key=f"pf_edit_rows_{acct_id}",
             )
@@ -405,7 +405,9 @@ with tab_reb:
             actual_qty: dict[int, int] = {}
             actual_invested = 0.0
             for r, (_, erow) in zip(rows, edited.iterrows()):
-                q = int(erow["체결수량"] or 0)
+                raw_q = erow["체결수량"]
+                # 셀을 비워둔 경우 NaN 이 들어옴 (NaN 은 truthy 라 `or 0` 으로 못 거름)
+                q = 0 if pd.isna(raw_q) else int(raw_q)
                 actual_qty[r.security_id] = q
                 actual_invested += q * r.price
             actual_cash = total_value - actual_invested
@@ -420,6 +422,10 @@ with tab_reb:
                 st.warning("체결수량 합이 입력 총가치를 초과합니다. 총가치 또는 체결수량을 확인하세요.")
 
             st.markdown("---")
+            # 직전 rerun 에서 저장이 성공했으면 flash 메시지 표시 (rerun 으로 success 가 사라지는 문제 방지)
+            flash_key = f"pf_save_flash_{acct_id}"
+            if flash_key in st.session_state:
+                st.success(st.session_state.pop(flash_key))
             save_date = st.date_input("스냅샷 날짜", value=date.today(), key=f"pf_save_date_{acct_id}")
             confirm = st.checkbox(
                 f"`{save_date}` 날짜의 기존 스냅샷이 있다면 **덮어씁니다**. 진행 확인",
@@ -430,9 +436,16 @@ with tab_reb:
                 items_payload = [
                     (r.security_id, actual_qty[r.security_id], r.price) for r in rows
                 ]
-                db.save_snapshot(acct_id, save_date, max(actual_cash, 0.0), items_payload)
-                st.success(f"{save_date} 스냅샷 저장 완료.")
-                st.rerun()
+                try:
+                    db.save_snapshot(acct_id, save_date, max(actual_cash, 0.0), items_payload)
+                except Exception as e:
+                    st.error(f"스냅샷 저장 실패: {e}")
+                else:
+                    st.session_state[flash_key] = (
+                        f"{save_date} 스냅샷 저장 완료 "
+                        f"(종목 {len(items_payload)}개, 예수금 {fmt_krw(max(actual_cash, 0.0))})."
+                    )
+                    st.rerun()
 
 
 # =================================================================
