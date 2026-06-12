@@ -308,6 +308,9 @@ with tab_reb:
             # 가격 상태: session_state 에 보관 (조회 후 수동 오버라이드 가능)
             price_key = f"pf_prices_{acct_id}"
             if fetch or price_key not in st.session_state:
+                # 버튼 클릭 시에는 캐시된 실패(None) 가 5분간 끼지 않도록 강제 무효화
+                if fetch:
+                    prices.get_current_price.clear()
                 st.session_state[price_key] = {
                     h["code"]: prices.get_current_price(h["code"], h["market"]) for h in holdings_meta
                 }
