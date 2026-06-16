@@ -1,130 +1,32 @@
-"""포트폴리오 리밸런싱 페이지 (Streamlit 멀티페이지).
+"""포트폴리오 — 계좌별 (Streamlit 멀티페이지).
 
-기존 app.py와 독립된 페이지. 인증은 st.session_state.authenticated 를 공유한다.
-헬퍼(require_auth, parse_num_or_formula)는 app.py 무수정 원칙을 유지하기 위해
-import 사이드 이펙트를 피하고 여기서 동일 로직을 다시 정의한다.
+계좌를 하나 고른 뒤 그 계좌에 대한 리밸런싱 / 현재 비중 / 과거 스냅샷 / 추이 / 설정을 다룬다.
+전체 계좌 합산은 '전체합산' 페이지, 계좌·종목 마스터 관리는 '관리' 페이지로 분리되어 있다.
+인증은 st.session_state.authenticated 를 공유한다.
 """
 
 from __future__ import annotations
 
-import ast
-import operator as _op
 from datetime import date
-from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
-from portfolio import db, prices, rebalance
-import _nav_label
+from portfolio import db, prices, rebalance, ui
 
 
-# ── 페이지 설정 ──────────────────────────────────────────────────
-st.set_page_config(page_title="포트폴리오", page_icon="📈", layout="wide")
-_nav_label.apply()
+# ── 페이지 설정 / 인증 ───────────────────────────────────────────
+ui.setup_page("포트폴리오", "📈")
+ui.require_auth()
 
-# 공통 스타일 (app.py 와 비슷한 톤만 가볍게 적용)
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
-    .stApp { background:#f6f8fa; color:#24292f; }
-    h1,h2,h3 { color:#24292f!important; }
-    .stTabs [data-baseweb="tab-list"] { border-bottom:1px solid #d0d7de; }
-    .stTabs [aria-selected="true"] { color:#24292f!important; border-bottom:2px solid #1a7f37!important; }
-    .stButton>button { background:#1a7f37!important; color:white!important; border:none!important;
-                       border-radius:6px!important; font-weight:500!important; }
-    .stButton>button:hover { background:#2da44e!important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ── 헬퍼 ─────────────────────────────────────────────────────────
-_SAFE_OPS = {
-    ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
-    ast.Div: _op.truediv, ast.Mod: _op.mod, ast.Pow: _op.pow,
-    ast.FloorDiv: _op.floordiv, ast.USub: _op.neg, ast.UAdd: _op.pos,
-}
-
-
-def _safe_eval(node):
-    if isinstance(node, ast.Expression):
-        return _safe_eval(node.body)
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-        return node.value
-    if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPS:
-        return _SAFE_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
-    if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPS:
-        return _SAFE_OPS[type(node.op)](_safe_eval(node.operand))
-    raise ValueError("허용되지 않은 식")
-
-
-def parse_num_or_formula(s: Any, default: float = 0.0):
-    if s is None:
-        return float(default), None, False
-    text = str(s).strip()
-    if text == "":
-        return float(default), None, False
-    is_formula = text.startswith("=")
-    expr = (text[1:] if is_formula else text).replace(",", "")
-    try:
-        if is_formula:
-            val = _safe_eval(ast.parse(expr, mode="eval"))
-        else:
-            val = float(expr)
-        return float(val), None, is_formula
-    except Exception as e:
-        return float(default), f"{e}", is_formula
-
-
-def require_auth():
-    if st.session_state.get("authenticated"):
-        return
-    st.markdown("### 🔒 이 페이지는 로그인이 필요합니다")
-    pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
-    if st.button("로그인", use_container_width=True):
-        if pw == st.secrets["APP_PASSWORD"]:
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("비밀번호가 틀렸습니다")
-    st.stop()
-
-
-def fmt_krw(v: float | int | None) -> str:
-    if v is None:
-        return "—"
-    try:
-        v = float(v)
-    except Exception:
-        return "—"
-    if abs(v) >= 1e8:
-        return f"₩{v / 1e8:.2f}억"
-    if abs(v) >= 1e4:
-        return f"₩{v / 1e4:.0f}만"
-    return f"₩{v:,.0f}"
-
-
-def fmt_pct(v: float | None, digits: int = 1) -> str:
-    if v is None:
-        return "—"
-    return f"{v * 100:.{digits}f}%"
-
-
-# ── 인증 ─────────────────────────────────────────────────────────
-require_auth()
-
-st.title("📈 포트폴리오 리밸런싱")
+st.title("📈 포트폴리오 — 계좌별")
 
 # ── 계좌 선택 ────────────────────────────────────────────────────
 accounts = db.list_accounts()
 if not accounts:
-    st.info("계좌가 없습니다. 아래 '⚙️ 관리' 탭에서 계좌를 먼저 추가하세요.")
-    # 그래도 관리 탭은 띄워줘야 계좌 생성 가능
+    st.info("계좌가 없습니다. '⚙️ 관리' 페이지에서 계좌를 먼저 추가하세요.")
     selected_account = None
 else:
     account_names = [a["name"] for a in accounts]
@@ -138,133 +40,9 @@ else:
     st.session_state["pf_selected_account"] = selected_name
     selected_account = next(a for a in accounts if a["name"] == selected_name)
 
-tab_all, tab_reb, tab_now, tab_hist, tab_trend, tab_admin = st.tabs(
-    ["🌐 전체 합산", "⚖️ 리밸런싱", "📊 현재 비중", "📅 과거 스냅샷", "📈 추이", "⚙️ 관리"]
+tab_reb, tab_now, tab_hist, tab_trend, tab_set = st.tabs(
+    ["⚖️ 리밸런싱", "📊 현재 비중", "📅 과거 스냅샷", "📈 추이", "⚙️ 설정"]
 )
-
-
-# =================================================================
-# 🌐 전체 합산 (모든 계좌 통합 포트폴리오)
-# =================================================================
-with tab_all:
-    if not accounts:
-        st.info("계좌가 없습니다. '⚙️ 관리' 탭에서 계좌를 먼저 추가하세요.")
-    else:
-        st.caption("모든 계좌의 최근 스냅샷 보유수량 × 실시간 현재가 + 예수금을 합산한 "
-                   "통합 포트폴리오입니다. 타겟비중은 각 계좌 평가액으로 가중 평균합니다.")
-
-        accounts_data = []
-        skipped = []
-        for a in accounts:
-            aid = a["id"]
-            latest = db.latest_snapshot(aid)
-            meta = db.get_account_securities(aid)
-            if not latest:
-                skipped.append(a["name"])
-                # 스냅샷이 없어도 타겟만 있는 계좌는 평가액 0 → 합산 기여 없음. 스킵.
-                continue
-            live = {h["code"]: (prices.get_current_price(h["code"], h["market"]) or 0.0)
-                    for h in meta}
-            items = [
-                {
-                    "security_id": it["security_id"],
-                    "code": it["code"],
-                    "name": it["name"],
-                    "quantity": it["quantity"],
-                    "price": live.get(it["code"], 0.0),
-                }
-                for it in latest["items"]
-            ]
-            targets = {h["security_id"]: h["target_weight"] for h in meta}
-            accounts_data.append({
-                "account_name": a["name"],
-                "items": items,
-                "cash_balance": latest["cash_balance"],
-                "targets": targets,
-            })
-
-        if not accounts_data:
-            st.info("합산할 스냅샷이 없습니다. 각 계좌의 '⚖️ 리밸런싱' 탭에서 스냅샷을 먼저 저장하세요.")
-        else:
-            combined = rebalance.compute_combined_portfolio(accounts_data)
-            grand = combined["grand_total"]
-            cash = combined["cash"]
-
-            m1, m2, m3 = st.columns(3)
-            m1.metric("전체 평가가치", fmt_krw(grand))
-            m2.metric("주식 평가가치", fmt_krw(grand - cash["value"]))
-            m3.metric("합산 계좌 수", f"{len(accounts_data)}개")
-            if skipped:
-                st.caption(f"⚠️ 스냅샷이 없어 제외된 계좌: {', '.join(skipped)}")
-
-            rows_all = [
-                {
-                    "종목명": r["name"],
-                    "코드": r["code"],
-                    "평가액": r["value"],
-                    "현재비중(%)": r["weight"] * 100,
-                    "타겟비중(%)": r["target_weight"] * 100,
-                    "드리프트(%)": (r["weight"] - r["target_weight"]) * 100,
-                }
-                for r in combined["rows"]
-            ]
-            rows_all.append({
-                "종목명": "현금",
-                "코드": "—",
-                "평가액": cash["value"],
-                "현재비중(%)": cash["weight"] * 100,
-                "타겟비중(%)": cash["target_weight"] * 100,
-                "드리프트(%)": (cash["weight"] - cash["target_weight"]) * 100,
-            })
-            df_all = pd.DataFrame(rows_all)
-            st.dataframe(
-                df_all,
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "평가액": st.column_config.NumberColumn(format="₩%.0f"),
-                    "현재비중(%)": st.column_config.NumberColumn(format="%.2f"),
-                    "타겟비중(%)": st.column_config.NumberColumn(format="%.2f"),
-                    "드리프트(%)": st.column_config.NumberColumn(format="%+.2f"),
-                },
-            )
-
-            # 도넛: 현재 vs 타겟 (현금 포함)
-            labels = [r["종목명"] for r in rows_all]
-            cur_vals = [r["평가액"] for r in rows_all]
-            tgt_vals = [r["타겟비중(%)"] / 100 * grand for r in rows_all]
-
-            fig = go.Figure()
-            fig.add_trace(go.Pie(labels=labels, values=cur_vals, hole=0.55, name="현재",
-                                 domain={"x": [0, 0.48]}, title="현재",
-                                 textposition="inside", textinfo="percent",
-                                 insidetextorientation="horizontal"))
-            fig.add_trace(go.Pie(labels=labels, values=tgt_vals, hole=0.55, name="타겟",
-                                 domain={"x": [0.52, 1]}, title="타겟",
-                                 textposition="inside", textinfo="percent",
-                                 insidetextorientation="horizontal"))
-            fig.update_layout(
-                height=520, margin=dict(t=30, b=10, l=10, r=10),
-                showlegend=True, uniformtext=dict(minsize=10, mode="hide"),
-                legend=dict(orientation="h", yanchor="top", y=-0.05,
-                            xanchor="center", x=0.5, font=dict(size=11)),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            # 드리프트 막대 (현금 제외)
-            drift_rows = [r for r in rows_all if r["종목명"] != "현금"]
-            if drift_rows:
-                bar = go.Figure(
-                    go.Bar(
-                        x=[r["종목명"] for r in drift_rows],
-                        y=[r["드리프트(%)"] for r in drift_rows],
-                        marker_color=["#cf222e" if r["드리프트(%)"] > 0 else "#1a7f37"
-                                      for r in drift_rows],
-                    )
-                )
-                bar.update_layout(height=280, margin=dict(t=30, b=10, l=10, r=10),
-                                  title="타겟 대비 드리프트 (%, 양수=과보유)")
-                st.plotly_chart(bar, use_container_width=True)
 
 
 # =================================================================
@@ -279,7 +57,7 @@ with tab_reb:
         latest = db.latest_snapshot(acct_id)
 
         if not holdings_meta:
-            st.info("이 계좌에 등록된 종목이 없습니다. '⚙️ 관리' 탭에서 종목을 추가하세요.")
+            st.info("이 계좌에 등록된 종목이 없습니다. '⚙️ 설정' 탭에서 종목을 추가하세요.")
         else:
             target_sum = sum(h["target_weight"] for h in holdings_meta)
             cash_target = max(0.0, 1.0 - target_sum)
@@ -292,16 +70,16 @@ with tab_reb:
                     key=f"pf_total_input_widget_{acct_id}",
                 )
                 st.session_state[f"pf_total_input_{acct_id}"] = raw_total
-            total_value, err, _ = parse_num_or_formula(raw_total, 0.0)
+            total_value, err, _ = ui.parse_num_or_formula(raw_total, 0.0)
             if err:
                 st.warning(f"입력 오류: {err}")
             with colB:
-                st.metric("타겟 합", fmt_pct(target_sum))
+                st.metric("타겟 합", ui.fmt_pct(target_sum))
             with colC:
-                st.metric("현금 타겟(잔여)", fmt_pct(cash_target))
+                st.metric("현금 타겟(잔여)", ui.fmt_pct(cash_target))
 
             if target_sum > 1.0 + 1e-9:
-                st.error(f"타겟 비중 합이 100%를 초과합니다 ({fmt_pct(target_sum)}). '⚙️ 관리'에서 조정하세요.")
+                st.error(f"타겟 비중 합이 100%를 초과합니다 ({ui.fmt_pct(target_sum)}). '⚙️ 설정'에서 조정하세요.")
 
             fetch = st.button("💹 현재가 조회", use_container_width=True)
 
@@ -349,7 +127,7 @@ with tab_reb:
                         label_visibility="collapsed",
                     )
                 with c4:
-                    st.markdown(f"<div style='padding-top:6px;color:#57606a'>목표 {fmt_pct(h['target_weight'])}</div>",
+                    st.markdown(f"<div style='padding-top:6px;color:#57606a'>목표 {ui.fmt_pct(h['target_weight'])}</div>",
                                 unsafe_allow_html=True)
                 with c5:
                     if not st.session_state[price_key].get(h["code"]):
@@ -414,10 +192,10 @@ with tab_reb:
             actual_total = actual_invested + max(actual_cash, 0.0)
 
             mc1, mc2, mc3 = st.columns(3)
-            mc1.metric("입력 총가치", fmt_krw(total_value))
-            mc2.metric("실제 잔여현금", fmt_krw(actual_cash),
-                       delta=f"추천 {fmt_krw(expected_cash)}")
-            mc3.metric("주식 투자액", fmt_krw(actual_invested))
+            mc1.metric("입력 총가치", ui.fmt_krw(total_value))
+            mc2.metric("실제 잔여현금", ui.fmt_krw(actual_cash),
+                       delta=f"추천 {ui.fmt_krw(expected_cash)}")
+            mc3.metric("주식 투자액", ui.fmt_krw(actual_invested))
             if actual_cash < 0:
                 st.warning("체결수량 합이 입력 총가치를 초과합니다. 총가치 또는 체결수량을 확인하세요.")
 
@@ -443,7 +221,7 @@ with tab_reb:
                 else:
                     st.session_state[flash_key] = (
                         f"{save_date} 스냅샷 저장 완료 "
-                        f"(종목 {len(items_payload)}개, 예수금 {fmt_krw(max(actual_cash, 0.0))})."
+                        f"(종목 {len(items_payload)}개, 예수금 {ui.fmt_krw(max(actual_cash, 0.0))})."
                     )
                     st.rerun()
 
@@ -463,7 +241,7 @@ with tab_now:
         elif not holdings_meta:
             st.info("이 계좌에 등록된 종목이 없습니다.")
         else:
-            st.caption(f"최근 스냅샷: **{latest['snapshot_date']}**  ·  예수금 {fmt_krw(latest['cash_balance'])}")
+            st.caption(f"최근 스냅샷: **{latest['snapshot_date']}**  ·  예수금 {ui.fmt_krw(latest['cash_balance'])}")
             live_prices = {h["code"]: (prices.get_current_price(h["code"], h["market"]) or 0.0) for h in holdings_meta}
             enriched, total = rebalance.compute_current_weights(
                 latest["items"], live_prices, latest["cash_balance"]
@@ -500,8 +278,8 @@ with tab_now:
             )
 
             m1, m2 = st.columns(2)
-            m1.metric("총 평가가치", fmt_krw(total))
-            m2.metric("주식 평가가치", fmt_krw(total - latest["cash_balance"]))
+            m1.metric("총 평가가치", ui.fmt_krw(total))
+            m2.metric("주식 평가가치", ui.fmt_krw(total - latest["cash_balance"]))
 
             # 도넛: 현재 vs 타겟
             labels = [r["종목명"] for r in rows_now] + ["현금"]
@@ -586,9 +364,9 @@ with tab_hist:
                     },
                 )
                 c1, c2, c3 = st.columns(3)
-                c1.metric("총 평가가치", fmt_krw(total))
-                c2.metric("주식 평가가치", fmt_krw(stock_total))
-                c3.metric("예수금", fmt_krw(snap["cash_balance"]))
+                c1.metric("총 평가가치", ui.fmt_krw(total))
+                c2.metric("주식 평가가치", ui.fmt_krw(stock_total))
+                c3.metric("예수금", ui.fmt_krw(snap["cash_balance"]))
 
                 with st.expander("이 스냅샷 삭제"):
                     if st.button("🗑️ 삭제", key=f"pf_hist_del_{acct_id}_{sel}"):
@@ -735,87 +513,15 @@ with tab_trend:
 
 
 # =================================================================
-# ⚙️ 관리
+# ⚙️ 설정 (계좌별 종목 / 타겟 비중)
 # =================================================================
-with tab_admin:
-    st.subheader("계좌")
-    with st.form("pf_new_account", clear_on_submit=True):
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            new_account_name = st.text_input("새 계좌 이름", placeholder="예: 장기투자 ISA")
-        with col2:
-            submitted = st.form_submit_button("계좌 추가")
-        if submitted and new_account_name.strip():
-            try:
-                db.create_account(new_account_name.strip())
-                st.success(f"계좌 '{new_account_name}' 생성됨.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"생성 실패: {e}")
-
-    if accounts:
-        for a in accounts:
-            ac1, ac2 = st.columns([5, 1])
-            ac1.markdown(f"• **{a['name']}** (id {a['id']})")
-            if ac2.button("삭제", key=f"pf_del_acc_{a['id']}"):
-                try:
-                    db.delete_account(a["id"])
-                    st.success("삭제 완료.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"삭제 실패 (스냅샷/종목이 연결되어 있을 수 있음): {e}")
-
-    st.divider()
-    st.subheader("종목 마스터")
-    securities = db.list_securities()
-    with st.form("pf_new_sec", clear_on_submit=True):
-        c1, c2, c3, c4 = st.columns([2, 3, 1.5, 1])
-        with c1:
-            new_code = st.text_input("종목코드", placeholder="069500")
-        with c2:
-            new_name = st.text_input("종목명", placeholder="KODEX 200")
-        with c3:
-            new_market = st.selectbox("시장", ["자동 감지", "KS (코스피)", "KQ (코스닥)"])
-        with c4:
-            sec_submit = st.form_submit_button("추가")
-        if sec_submit and new_code.strip() and new_name.strip():
-            code = new_code.strip()
-            if new_market.startswith("자동"):
-                with st.spinner("시장 자동 감지 중..."):
-                    m = prices.resolve_market(code)
-                if not m:
-                    st.error("자동 감지 실패. KS/KQ 를 직접 선택하세요.")
-                    m = None
-            else:
-                m = "KS" if new_market.startswith("KS") else "KQ"
-            if m:
-                try:
-                    db.upsert_security(code, new_name.strip(), m)
-                    st.success(f"{new_name} ({code}.{m}) 등록.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"등록 실패: {e}")
-
-    if securities:
-        sec_df = pd.DataFrame(
-            [{"id": s["id"], "코드": s["code"], "종목명": s["name"], "시장": s["market"]} for s in securities]
-        )
-        st.dataframe(sec_df, hide_index=True, use_container_width=True)
-        del_id = st.number_input("삭제할 종목 id", min_value=0, value=0, step=1)
-        if st.button("종목 삭제", key="pf_del_sec_btn") and del_id > 0:
-            try:
-                db.delete_security(int(del_id))
-                st.success("삭제 완료.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"삭제 실패 (어딘가에 사용 중일 수 있음): {e}")
-
-    st.divider()
+with tab_set:
     st.subheader("계좌별 종목 / 타겟 비중")
+    securities = db.list_securities()
     if not selected_account:
-        st.info("계좌를 먼저 생성하세요.")
+        st.info("계좌를 먼저 생성하세요. ('⚙️ 관리' 페이지)")
     elif not securities:
-        st.info("먼저 종목 마스터에 종목을 추가하세요.")
+        st.info("먼저 '⚙️ 관리' 페이지의 종목 마스터에 종목을 추가하세요.")
     else:
         acct_id = selected_account["id"]
         current = db.get_account_securities(acct_id)
