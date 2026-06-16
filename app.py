@@ -857,7 +857,10 @@ elif page == "📈 상세 분석":
             with col: card(lbl, fmt_krw(_pv(a, b)), color="gold")
         fig = go.Figure()
         for i, (lbl, a, b) in enumerate(pension_defs):
-            fig.add_trace(go.Scatter(x=df["date"], y=_ps(a, b), name=lbl,
+            # 값이 0인 시점(계좌 개설 전 등)은 NaN 처리해 제외하고 실제 값끼리만 잇는다.
+            y = _ps(a, b)
+            y = y.where(y != 0)
+            fig.add_trace(go.Scatter(x=df["date"], y=y, name=lbl, connectgaps=True,
                 line=dict(color=clrs_p[i], width=2)))
         fig.update_layout(**LAYOUT, title="연금 자산 추이")
         st.plotly_chart(_add_markers(fig), use_container_width=True, key="tab4_pension")
@@ -944,7 +947,10 @@ elif page == "📈 상세 분석":
         ("준민IRP",    _jm_irp),
         ("은미IRP",    _em_irp),
     ]):
-        fig.add_trace(go.Scatter(x=df["date"], y=vals, name=lbl,
+        # 값이 0인 시점(계좌 개설 전 등)은 NaN 처리해 마커/선에서 제외하고,
+        # 실제 값이 있는 점들끼리만 connectgaps 로 이어 그린다.
+        y = vals.where(vals != 0)
+        fig.add_trace(go.Scatter(x=df["date"], y=y, name=lbl, connectgaps=True,
             line=dict(color=["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"][i], width=2)))
     fig.update_layout(**LAYOUT, title="연금 자산 추이")
     st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_pension")
