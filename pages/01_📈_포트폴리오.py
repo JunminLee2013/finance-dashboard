@@ -451,6 +451,8 @@ with tab_trend:
                 height=420, margin=dict(t=20, b=10, l=10, r=10),
                 yaxis=dict(title="비중 (%)", range=[0, 100], ticksuffix="%"),
                 hovermode="x unified",
+                legend=dict(orientation="h", yanchor="top", y=-0.08,
+                            xanchor="center", x=0.5, font=dict(size=11)),
             )
             st.plotly_chart(area, use_container_width=True)
             st.caption(
@@ -465,12 +467,14 @@ with tab_trend:
             chart_sids = [sid for sid in order_sids if sid != rebalance.CASH_SID]
             if chart_sids:
                 n = len(chart_sids)
-                ncols = 2 if n > 1 else 1
-                nrows = (n + ncols - 1) // ncols
+                ncols = 1  # 한 행에 1개씩 (모바일 가시성)
+                nrows = n
+                # vertical_spacing 은 1/(nrows-1) 미만이어야 하므로 행이 많아지면 줄인다.
+                vspace = min(0.08, 1.0 / nrows) if nrows > 1 else 0.0
                 sm = make_subplots(
                     rows=nrows, cols=ncols,
                     subplot_titles=[label_for.get(sid, "?") for sid in chart_sids],
-                    vertical_spacing=0.12, horizontal_spacing=0.08,
+                    vertical_spacing=vspace,
                 )
                 for i, sid in enumerate(chart_sids):
                     r = i // ncols + 1
