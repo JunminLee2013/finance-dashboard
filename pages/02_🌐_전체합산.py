@@ -60,37 +60,33 @@ else:
         st.info("합산할 스냅샷이 없습니다. 각 계좌의 '⚖️ 리밸런싱' 탭에서 스냅샷을 먼저 저장하세요.")
     else:
         combined = rebalance.compute_combined_portfolio(accounts_data)
-        grand = combined["grand_total"]
-        cash = combined["cash"]
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("전체 평가가치", ui.fmt_krw(grand))
-        m2.metric("주식 평가가치", ui.fmt_krw(grand - cash["value"]))
-        m3.metric("합산 계좌 수", f"{len(accounts_data)}개")
+        # 현금 및 미보유(허수) 종목 제외: 실제 보유수량이 있는 주식만 합산한다.
+        # 타겟만 설정돼 있고 보유가 0인 종목(이름/코드 메타가 없어 #id 로 뜨던 항목)도
+        # 보유수량 0 이므로 함께 제외된다. 비중은 남은 주식 합계 기준으로 재정규화한다.
+        sec_rows = [r for r in combined["rows"] if r["quantity"] > 0]
+        stock_total = sum(r["value"] for r in sec_rows)
+        tw_sum = sum(r["target_weight"] for r in sec_rows)
+
+        m1, m2 = st.columns(2)
+        m1.metric("주식 평가가치", ui.fmt_krw(stock_total))
+        m2.metric("합산 계좌 수", f"{len(accounts_data)}개")
         if skipped:
             st.caption(f"⚠️ 스냅샷이 없어 제외된 계좌: {', '.join(skipped)}")
 
-        rows_all = [
-            {
+        rows_all = []
+        for r in sec_rows:
+            w = (r["value"] / stock_total) if stock_total > 0 else 0.0
+            tw = (r["target_weight"] / tw_sum) if tw_sum > 0 else 0.0
+            rows_all.append({
                 "종목명": r["name"],
                 "코드": r["code"],
                 "총수량": r["quantity"],
                 "평가액": r["value"],
-                "현재비중(%)": r["weight"] * 100,
-                "타겟비중(%)": r["target_weight"] * 100,
-                "드리프트(%)": (r["weight"] - r["target_weight"]) * 100,
-            }
-            for r in combined["rows"]
-        ]
-        rows_all.append({
-            "종목명": "현금",
-            "코드": "—",
-            "총수량": None,
-            "평가액": cash["value"],
-            "현재비중(%)": cash["weight"] * 100,
-            "타겟비중(%)": cash["target_weight"] * 100,
-            "드리프트(%)": (cash["weight"] - cash["target_weight"]) * 100,
-        })
+                "현재비중(%)": w * 100,
+                "타겟비중(%)": tw * 100,
+                "드리프트(%)": (w - tw) * 100,
+            })
         df_all = pd.DataFrame(rows_all)
         st.dataframe(
             df_all,
@@ -120,7 +116,7 @@ else:
                 )
 
         qty_rows = []
-        for r in combined["rows"]:
+        for r in sec_rows:
             row = {
                 "종목명": r["name"],
                 "코드": r["code"],
@@ -142,10 +138,10 @@ else:
             },
         )
 
-        # 도넛: 현재 vs 타겟 (현금 포함)
+        # 도넛: 현재 vs 타겟 (현금 제외, 주식만)
         labels = [r["종목명"] for r in rows_all]
         cur_vals = [r["평가액"] for r in rows_all]
-        tgt_vals = [r["타겟비중(%)"] / 100 * grand for r in rows_all]
+        tgt_vals = [r["타겟비중(%)"] / 100 * stock_total for r in rows_all]
 
         fig = go.Figure()
         fig.add_trace(go.Pie(labels=labels, values=cur_vals, hole=0.55, name="현재",
@@ -164,8 +160,8 @@ else:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # 드리프트 막대 (현금 제외)
-        drift_rows = [r for r in rows_all if r["종목명"] != "현금"]
+        # 드리프트 막대 (주식만)
+        drift_rows = rows_all
         if drift_rows:
             bar = go.Figure(
                 go.Bar(
