@@ -74,6 +74,7 @@ else:
             {
                 "종목명": r["name"],
                 "코드": r["code"],
+                "총수량": r["quantity"],
                 "평가액": r["value"],
                 "현재비중(%)": r["weight"] * 100,
                 "타겟비중(%)": r["target_weight"] * 100,
@@ -84,6 +85,7 @@ else:
         rows_all.append({
             "종목명": "현금",
             "코드": "—",
+            "총수량": None,
             "평가액": cash["value"],
             "현재비중(%)": cash["weight"] * 100,
             "타겟비중(%)": cash["target_weight"] * 100,
@@ -95,10 +97,48 @@ else:
             hide_index=True,
             use_container_width=True,
             column_config={
+                "총수량": st.column_config.NumberColumn(format="%d"),
                 "평가액": st.column_config.NumberColumn(format="₩%.0f"),
                 "현재비중(%)": st.column_config.NumberColumn(format="%.2f"),
                 "타겟비중(%)": st.column_config.NumberColumn(format="%.2f"),
                 "드리프트(%)": st.column_config.NumberColumn(format="%+.2f"),
+            },
+        )
+
+        # ── 계좌별 보유수량 표 ──────────────────────────────────
+        # 종목(행) × 계좌(열) 피벗. 같은 종목이 여러 계좌에 흩어져 있어도
+        # security_id 기준으로 한 행에 모은다.
+        st.subheader("계좌별 보유수량")
+        account_names = [acct["account_name"] for acct in accounts_data]
+        qty_map: dict[int, dict[str, int]] = {}
+        for acct in accounts_data:
+            for it in acct["items"]:
+                sid = it["security_id"]
+                qty_map.setdefault(sid, {})
+                qty_map[sid][acct["account_name"]] = (
+                    qty_map[sid].get(acct["account_name"], 0) + int(it["quantity"] or 0)
+                )
+
+        qty_rows = []
+        for r in combined["rows"]:
+            row = {
+                "종목명": r["name"],
+                "코드": r["code"],
+                "총수량": r["quantity"],
+            }
+            per_acct = qty_map.get(r["security_id"], {})
+            for name in account_names:
+                row[name] = per_acct.get(name, 0)
+            qty_rows.append(row)
+
+        df_qty = pd.DataFrame(qty_rows)
+        st.dataframe(
+            df_qty,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                col: st.column_config.NumberColumn(format="%d")
+                for col in ["총수량", *account_names]
             },
         )
 

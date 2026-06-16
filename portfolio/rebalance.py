@@ -119,13 +119,14 @@ def compute_combined_portfolio(accounts_data: list[dict]) -> dict:
 
     반환:
         {
-            "rows": [{security_id, code, name, value, target_value,
+            "rows": [{security_id, code, name, quantity, value, target_value,
                       weight, target_weight}, ...],   # 종목별 합산 (현금 제외)
             "cash": {value, target_value, weight, target_weight},
             "grand_total": float,
         }
     """
     cur_val: dict[int, float] = {}
+    cur_qty: dict[int, int] = {}
     tgt_val: dict[int, float] = {}
     label: dict[int, dict] = {}
     cash_cur = 0.0
@@ -144,8 +145,10 @@ def compute_combined_portfolio(accounts_data: list[dict]) -> dict:
             if sid is None:
                 continue
             sid = int(sid)
-            v = float(it.get("price", 0) or 0) * int(it.get("quantity", 0) or 0)
+            qty = int(it.get("quantity", 0) or 0)
+            v = float(it.get("price", 0) or 0) * qty
             item_val[sid] = item_val.get(sid, 0.0) + v
+            cur_qty[sid] = cur_qty.get(sid, 0) + qty
             label.setdefault(sid, {"code": it.get("code"), "name": it.get("name")})
         account_total = sum(item_val.values()) + cash
         grand_total += account_total
@@ -176,6 +179,7 @@ def compute_combined_portfolio(accounts_data: list[dict]) -> dict:
             "security_id": sid,
             "code": meta.get("code"),
             "name": meta.get("name") or meta.get("code") or f"#{sid}",
+            "quantity": cur_qty.get(sid, 0),
             "value": v,
             "target_value": tv,
             "weight": (v / grand_total) if grand_total > 0 else 0.0,
