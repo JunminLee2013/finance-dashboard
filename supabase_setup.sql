@@ -53,6 +53,10 @@ CREATE TABLE IF NOT EXISTS public.finance_monthly (
     jm_pension_profit           NUMERIC DEFAULT 0,       -- 준민연금저축 수익금
     em_pension_principal        NUMERIC DEFAULT 0,       -- 은미연금저축 원금
     em_pension_profit           NUMERIC DEFAULT 0,       -- 은미연금저축 수익금
+    jm_pension2_principal       NUMERIC DEFAULT 0,       -- 준민연금저축2 원금
+    jm_pension2_profit          NUMERIC DEFAULT 0,       -- 준민연금저축2 수익금
+    em_pension2_principal       NUMERIC DEFAULT 0,       -- 은미연금저축2 원금
+    em_pension2_profit          NUMERIC DEFAULT 0,       -- 은미연금저축2 수익금
     jm_irp_principal            NUMERIC DEFAULT 0,       -- 준민IRP 원금
     jm_irp_profit               NUMERIC DEFAULT 0,       -- 준민IRP 수익금
     em_irp_principal            NUMERIC DEFAULT 0,       -- 은미IRP 원금
@@ -150,6 +154,15 @@ COMMENT ON TABLE public.finance_monthly IS '월별 재무상태표 - 개인 자�
 -- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS em_card_debt NUMERIC DEFAULT 0;
 -- UPDATE public.finance_monthly SET jm_card_debt = COALESCE(card_debt, 0) WHERE card_debt IS NOT NULL;
 -- ALTER TABLE public.finance_monthly DROP COLUMN card_debt;
+
+-- ================================================================
+-- 마이그레이션: 연금저축2 (준민/은미) 항목 추가
+-- 기존 DB에서 한 번만 실행 (이미 위 CREATE에 반영된 신규 DB는 불필요)
+-- ================================================================
+-- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS jm_pension2_principal NUMERIC DEFAULT 0;
+-- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS jm_pension2_profit    NUMERIC DEFAULT 0;
+-- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS em_pension2_principal NUMERIC DEFAULT 0;
+-- ALTER TABLE public.finance_monthly ADD COLUMN IF NOT EXISTS em_pension2_profit    NUMERIC DEFAULT 0;
 
 -- ================================================================
 -- 포트폴리오 리밸런싱 시스템
