@@ -435,6 +435,10 @@ elif page == "📝 데이터 입력":
             ("jm_pension_profit",         "num", dv("jm_pension_profit")),
             ("em_pension_principal",      "num", dv("em_pension_principal")),
             ("em_pension_profit",         "num", dv("em_pension_profit")),
+            ("jm_pension2_principal",     "num", dv("jm_pension2_principal")),
+            ("jm_pension2_profit",        "num", dv("jm_pension2_profit")),
+            ("em_pension2_principal",     "num", dv("em_pension2_principal")),
+            ("em_pension2_profit",        "num", dv("em_pension2_profit")),
             ("jm_irp_principal",          "num", dv("jm_irp_principal")),
             ("jm_irp_profit",             "num", dv("jm_irp_profit")),
             ("em_irp_principal",          "num", dv("em_irp_principal")),
@@ -458,6 +462,8 @@ elif page == "📝 데이터 입력":
         "teachers_mutual_bonus":"└ 부가금",
         "jm_pension_principal":"준민연금저축 원금","jm_pension_profit":"└ 수익금",
         "em_pension_principal":"은미연금저축 원금","em_pension_profit":"└ 수익금",
+        "jm_pension2_principal":"준민연금저축2 원금","jm_pension2_profit":"└ 수익금",
+        "em_pension2_principal":"은미연금저축2 원금","em_pension2_profit":"└ 수익금",
         "jm_irp_principal":"준민IRP 원금","jm_irp_profit":"└ 수익금",
         "em_irp_principal":"은미IRP 원금","em_irp_profit":"└ 수익금",
     }
@@ -596,6 +602,8 @@ elif page == "📋 데이터 관리":
             "teachers_mutual_bonus": "공제회부가금",
             "jm_pension_principal": "준민연금원금", "jm_pension_profit": "준민연금수익",
             "em_pension_principal": "은미연금원금", "em_pension_profit": "은미연금수익",
+            "jm_pension2_principal": "준민연금2원금", "jm_pension2_profit": "준민연금2수익",
+            "em_pension2_principal": "은미연금2원금", "em_pension2_profit": "은미연금2수익",
             "jm_irp_principal": "준민IRP원금", "jm_irp_profit": "준민IRP수익",
             "em_irp_principal": "은미IRP원금", "em_irp_profit": "은미IRP수익",
         }
@@ -809,17 +817,20 @@ elif page == "📈 상세 분석":
         _tm2 = _c("teachers_mutual")
         _jp2 = _c("jm_pension_principal") + _c("jm_pension_profit")
         _ep2 = _c("em_pension_principal") + _c("em_pension_profit")
+        _jp2b = _c("jm_pension2_principal") + _c("jm_pension2_profit")
+        _ep2b = _c("em_pension2_principal") + _c("em_pension2_profit")
         _ji2 = _c("jm_irp_principal")     + _c("jm_irp_profit")
         _ei2 = _c("em_irp_principal")     + _c("em_irp_profit")
         _liq2 = _ca2 + _st2 + _co2
-        _ill2 = _tm2 + _jp2 + _ep2 + _ji2 + _ei2
-        view2 = st.radio("보기 방식", ["요약 (3가지)", "세부 (9가지)"], horizontal=True,
+        _ill2 = _tm2 + _jp2 + _ep2 + _jp2b + _ep2b + _ji2 + _ei2
+        view2 = st.radio("보기 방식", ["요약 (3가지)", "세부 (11가지)"], horizontal=True,
                          label_visibility="collapsed", key="anal_asset_view")
         traces2 = ([(_r2,"실물","#8c959f"),(_liq2,"유동금융자산","#0969da"),(_ill2,"비유동금융자산(연금)","#bf8700")]
                    if view2 == "요약 (3가지)" else
                    [(_r2,"실물","#8c959f"),(_co2,"코인","#bf8700"),(_st2,"주식","#0969da"),
                     (_ca2,"현금성","#2da44e"),(_tm2,"교직원공제회","#8250df"),(_jp2,"준민연금저축","#bc8cff"),
-                    (_ep2,"은미연금저축","#d2a8ff"),(_ji2,"준민IRP","#cf4945"),(_ei2,"은미IRP","#fa8a87")])
+                    (_jp2b,"준민연금저축2","#9a6dd7"),(_ep2,"은미연금저축","#d2a8ff"),
+                    (_ep2b,"은미연금저축2","#c9a3f0"),(_ji2,"준민IRP","#cf4945"),(_ei2,"은미IRP","#fa8a87")])
         fig = go.Figure()
         for vals, name, color in traces2:
             fig.add_trace(go.Bar(x=df["date"], y=vals, name=name, marker_color=color))
@@ -840,21 +851,25 @@ elif page == "📈 상세 분석":
             st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_debt_ratio")
     with tab4:
         st.markdown('<div class="sec">최신 연금 현황</div>', unsafe_allow_html=True)
-        c1, c2, c3, c4, c5 = st.columns(5)
         def _pv(a, b=None): return float(latest.get(a) or 0) + (float(latest.get(b) or 0) if b else 0)
         def _ps(a, b=None):
             s = df[a].fillna(0) if a in df.columns else pd.Series(0, index=df.index)
             return s + (df[b].fillna(0) if (b and b in df.columns) else pd.Series(0, index=df.index))
         pension_defs = [
-            ("교직원공제회", "teachers_mutual",      None),
-            ("준민연금저축", "jm_pension_principal", "jm_pension_profit"),
-            ("은미연금저축", "em_pension_principal", "em_pension_profit"),
-            ("준민IRP",    "jm_irp_principal",      "jm_irp_profit"),
-            ("은미IRP",    "em_irp_principal",      "em_irp_profit"),
+            ("교직원공제회",  "teachers_mutual",       None),
+            ("준민연금저축",  "jm_pension_principal",  "jm_pension_profit"),
+            ("준민연금저축2", "jm_pension2_principal", "jm_pension2_profit"),
+            ("은미연금저축",  "em_pension_principal",  "em_pension_profit"),
+            ("은미연금저축2", "em_pension2_principal", "em_pension2_profit"),
+            ("준민IRP",     "jm_irp_principal",      "jm_irp_profit"),
+            ("은미IRP",     "em_irp_principal",      "em_irp_profit"),
         ]
-        clrs_p = ["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"]
-        for col, (lbl, a, b) in zip([c1,c2,c3,c4,c5], pension_defs):
-            with col: card(lbl, fmt_krw(_pv(a, b)), color="gold")
+        clrs_p = ["#388bfd","#2ea043","#9a6dd7","#d29922","#c9a3f0","#bc8cff","#f78166"]
+        for _start in range(0, len(pension_defs), 4):
+            _chunk = pension_defs[_start:_start + 4]
+            _cols  = st.columns(4)
+            for col, (lbl, a, b) in zip(_cols, _chunk):
+                with col: card(lbl, fmt_krw(_pv(a, b)), color="gold")
         fig = go.Figure()
         for i, (lbl, a, b) in enumerate(pension_defs):
             # 값이 0인 시점(계좌 개설 전 등)은 NaN 처리해 제외하고 실제 값끼리만 잇는다.
@@ -904,13 +919,15 @@ elif page == "📈 상세 분석":
     _tm      = _col("teachers_mutual")
     _jm_pen  = _col("jm_pension_principal") + _col("jm_pension_profit")
     _em_pen  = _col("em_pension_principal") + _col("em_pension_profit")
+    _jm_pen2 = _col("jm_pension2_principal") + _col("jm_pension2_profit")
+    _em_pen2 = _col("em_pension2_principal") + _col("em_pension2_profit")
     _jm_irp  = _col("jm_irp_principal")     + _col("jm_irp_profit")
     _em_irp  = _col("em_irp_principal")     + _col("em_irp_profit")
     # 유동금융 = cash+stk+coin 직접 합산 (financial_assets는 연금 포함될 수 있어 제외)
     _liq_fin_sum  = _cash + _stk + _coin
-    _illiquid_fin = _tm + _jm_pen + _em_pen + _jm_irp + _em_irp
+    _illiquid_fin = _tm + _jm_pen + _em_pen + _jm_pen2 + _em_pen2 + _jm_irp + _em_irp
 
-    view = st.radio("보기 방식", ["요약 (3가지)", "세부 (9가지)"], horizontal=True, label_visibility="collapsed")
+    view = st.radio("보기 방식", ["요약 (3가지)", "세부 (11가지)"], horizontal=True, label_visibility="collapsed")
     fig = go.Figure()
     if view == "요약 (3가지)":
         traces = [
@@ -926,7 +943,9 @@ elif page == "📈 상세 분석":
             (_cash,    "현금성",       "#2da44e"),
             (_tm,      "교직원공제회",  "#8250df"),
             (_jm_pen,  "준민연금저축",  "#bc8cff"),
+            (_jm_pen2, "준민연금저축2", "#9a6dd7"),
             (_em_pen,  "은미연금저축",  "#d2a8ff"),
+            (_em_pen2, "은미연금저축2", "#c9a3f0"),
             (_jm_irp,  "준민IRP",      "#cf4945"),
             (_em_irp,  "은미IRP",      "#fa8a87"),
         ]
@@ -943,7 +962,9 @@ elif page == "📈 상세 분석":
     for i, (lbl, vals) in enumerate([
         ("교직원공제회", _tm),
         ("준민연금저축", _jm_pen),
+        ("준민연금저축2", _jm_pen2),
         ("은미연금저축", _em_pen),
+        ("은미연금저축2", _em_pen2),
         ("준민IRP",    _jm_irp),
         ("은미IRP",    _em_irp),
     ]):
@@ -951,6 +972,6 @@ elif page == "📈 상세 분석":
         # 실제 값이 있는 점들끼리만 connectgaps 로 이어 그린다.
         y = vals.where(vals != 0)
         fig.add_trace(go.Scatter(x=df["date"], y=y, name=lbl, connectgaps=True,
-            line=dict(color=["#388bfd","#2ea043","#d29922","#bc8cff","#f78166"][i], width=2)))
+            line=dict(color=["#388bfd","#2ea043","#9a6dd7","#d29922","#c9a3f0","#bc8cff","#f78166"][i], width=2)))
     fig.update_layout(**LAYOUT, title="연금 자산 추이")
     st.plotly_chart(_add_markers(fig), use_container_width=True, key="det_pension")

@@ -26,6 +26,8 @@ def calc_derived(d: dict, df_all: pd.DataFrame = None) -> dict:
     pension = (g("teachers_mutual_principal") + g("teachers_mutual_bonus") +
                g("jm_pension_principal") + g("jm_pension_profit") +
                g("em_pension_principal") + g("em_pension_profit") +
+               g("jm_pension2_principal") + g("jm_pension2_profit") +
+               g("em_pension2_principal") + g("em_pension2_profit") +
                g("jm_irp_principal") + g("jm_irp_profit") +
                g("em_irp_principal") + g("em_irp_profit"))
 
