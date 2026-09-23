@@ -242,10 +242,17 @@ with tab_now:
             st.info("이 계좌에 등록된 종목이 없습니다.")
         else:
             st.caption(f"최근 스냅샷: **{latest['snapshot_date']}**  ·  예수금 {ui.fmt_krw(latest['cash_balance'])}")
-            live_prices = {h["code"]: (prices.get_current_price(h["code"], h["market"]) or 0.0) for h in holdings_meta}
-            # '⚙️ 설정'에서 체크 해제된 종목은 과거 스냅샷에 남아 있어도 제외한다.
+            # '⚙️ 설정'에서 해제된 종목은 제외하되, 실제 보유수량이 있으면 총액에 포함되도록 남긴다.
             included_ids = {h["security_id"] for h in holdings_meta}
-            snap_items = [it for it in latest["items"] if it["security_id"] in included_ids]
+            snap_items = [
+                it for it in latest["items"]
+                if it["security_id"] in included_ids or it["quantity"] > 0
+            ]
+            live_prices = {h["code"]: (prices.get_current_price(h["code"], h["market"]) or 0.0) for h in holdings_meta}
+            for it in snap_items:
+                if it["security_id"] not in included_ids:
+                    # 설정에서 해제된 보유 종목: 라이브 가격 실패 시 스냅샷 가격으로 대체
+                    live_prices[it["code"]] = prices.get_current_price(it["code"], it["market"]) or it["price"]
             enriched, total = rebalance.compute_current_weights(
                 snap_items, live_prices, latest["cash_balance"]
             )
@@ -578,6 +585,14 @@ with tab_set:
         if weight_sum > 100 + 1e-6:
             st.error("타겟 합계가 100%를 초과합니다.")
         if st.button("💾 변경 저장", use_container_width=True, key=f"pf_save_acc_sec_{acct_id}"):
+            # 타겟비중이 남아 있는 종목은 해제할 수 없다 (먼저 0% 로 낮춰야 함).
+            blocked = edited[(edited["포함"] != True) & (edited["타겟비중(%)"] > 0)]
+            if not blocked.empty:
+                st.error(
+                    "타겟비중이 0%가 아닌 종목은 해제할 수 없습니다. 먼저 타겟비중을 0으로 바꾸세요: "
+                    + ", ".join(blocked["종목명"].astype(str))
+                )
+                st.stop()
             try:
                 for _, r in edited.iterrows():
                     sid = int(r["security_id"])
