@@ -242,9 +242,19 @@ with tab_now:
             st.info("이 계좌에 등록된 종목이 없습니다.")
         else:
             st.caption(f"최근 스냅샷: **{latest['snapshot_date']}**  ·  예수금 {ui.fmt_krw(latest['cash_balance'])}")
+            # '⚙️ 설정'에서 해제된 종목은 제외하되, 실제 보유수량이 있으면 총액에 포함되도록 남긴다.
+            included_ids = {h["security_id"] for h in holdings_meta}
+            snap_items = [
+                it for it in latest["items"]
+                if it["security_id"] in included_ids or it["quantity"] > 0
+            ]
             live_prices = {h["code"]: (prices.get_current_price(h["code"], h["market"]) or 0.0) for h in holdings_meta}
+            for it in snap_items:
+                if it["security_id"] not in included_ids:
+                    # 설정에서 해제된 보유 종목: 라이브 가격 실패 시 스냅샷 가격으로 대체
+                    live_prices[it["code"]] = prices.get_current_price(it["code"], it["market"]) or it["price"]
             enriched, total = rebalance.compute_current_weights(
-                latest["items"], live_prices, latest["cash_balance"]
+                snap_items, live_prices, latest["cash_balance"]
             )
             tw_map = {h["code"]: h["target_weight"] for h in holdings_meta}
 
@@ -530,6 +540,10 @@ with tab_set:
         acct_id = selected_account["id"]
         current = db.get_account_securities(acct_id)
         current_ids = {c["security_id"] for c in current}
+        latest_set = db.latest_snapshot(acct_id)
+        held_qty = {
+            it["security_id"]: it["quantity"] for it in (latest_set["items"] if latest_set else [])
+        }
         sec_by_id = {s["id"]: s for s in securities}
 
         rows = []
@@ -543,6 +557,7 @@ with tab_set:
                     "시장": c["market"],
                     "타겟비중(%)": round(c["target_weight"] * 100, 2),
                     "순서": c["display_order"],
+                    "보유수량": held_qty.get(c["security_id"], 0),
                 }
             )
         for s in securities:
@@ -556,6 +571,7 @@ with tab_set:
                         "시장": s["market"],
                         "타겟비중(%)": 0.0,
                         "순서": 0,
+                        "보유수량": held_qty.get(s["id"], 0),
                     }
                 )
         edit_df = pd.DataFrame(rows)
@@ -563,7 +579,7 @@ with tab_set:
             edit_df,
             hide_index=True,
             use_container_width=True,
-            disabled=["security_id", "코드", "종목명", "시장"],
+            disabled=["security_id", "코드", "종목명", "시장", "보유수량"],
             column_config={
                 "타겟비중(%)": st.column_config.NumberColumn(min_value=0.0, max_value=100.0, step=0.1),
                 "순서": st.column_config.NumberColumn(min_value=0, step=1),
@@ -575,6 +591,24 @@ with tab_set:
         if weight_sum > 100 + 1e-6:
             st.error("타겟 합계가 100%를 초과합니다.")
         if st.button("💾 변경 저장", use_container_width=True, key=f"pf_save_acc_sec_{acct_id}"):
+            # 해제는 '보유수량 0 + 타겟비중 0%' 인 종목만 가능하다.
+            unchecked = edited[edited["포함"] != True]
+            blocked_tw = unchecked[unchecked["타겟비중(%)"] > 0]
+            blocked_qty = unchecked[
+                unchecked["security_id"].astype(int).isin(current_ids) & (unchecked["보유수량"] > 0)
+            ]
+            if not blocked_tw.empty or not blocked_qty.empty:
+                if not blocked_tw.empty:
+                    st.error(
+                        "타겟비중이 0%가 아닌 종목은 해제할 수 없습니다. 먼저 타겟비중을 0으로 바꾸세요: "
+                        + ", ".join(blocked_tw["종목명"].astype(str))
+                    )
+                if not blocked_qty.empty:
+                    st.error(
+                        "최근 스냅샷에 보유수량이 있는 종목은 해제할 수 없습니다. 타겟비중 0%로 포함해 두세요: "
+                        + ", ".join(blocked_qty["종목명"].astype(str))
+                    )
+                st.stop()
             try:
                 for _, r in edited.iterrows():
                     sid = int(r["security_id"])
