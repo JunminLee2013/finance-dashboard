@@ -243,8 +243,11 @@ with tab_now:
         else:
             st.caption(f"최근 스냅샷: **{latest['snapshot_date']}**  ·  예수금 {ui.fmt_krw(latest['cash_balance'])}")
             live_prices = {h["code"]: (prices.get_current_price(h["code"], h["market"]) or 0.0) for h in holdings_meta}
+            # '⚙️ 설정'에서 체크 해제된 종목은 과거 스냅샷에 남아 있어도 제외한다.
+            included_ids = {h["security_id"] for h in holdings_meta}
+            snap_items = [it for it in latest["items"] if it["security_id"] in included_ids]
             enriched, total = rebalance.compute_current_weights(
-                latest["items"], live_prices, latest["cash_balance"]
+                snap_items, live_prices, latest["cash_balance"]
             )
             tw_map = {h["code"]: h["target_weight"] for h in holdings_meta}
 
