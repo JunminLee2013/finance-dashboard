@@ -10,6 +10,7 @@ import ast
 import operator as _op
 from derived import calc_derived
 import _nav_label
+import backup
 
 # ── 수식/숫자 입력 파서 ─────────────────────────────────────────────
 # 엑셀처럼 "=1+2*3" 형태의 수식과 일반 숫자("1234", "1,234.5") 둘 다 지원.
@@ -144,11 +145,13 @@ def save_row(record: dict):
     sb = get_supabase()
     sb.table("finance_monthly").upsert(record, on_conflict="date").execute()
     st.cache_data.clear()
+    backup.schedule_backup("월별 데이터 저장")
 
 def delete_row(row_id: int):
     sb = get_supabase()
     sb.table("finance_monthly").delete().eq("id", row_id).execute()
     st.cache_data.clear()
+    backup.schedule_backup("월별 데이터 삭제")
 
 # ── 포맷 헬퍼 ─────────────────────────────────────────────────────
 def fmt_krw(v):

@@ -85,11 +85,36 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 ---
 
+## 💾 DB 자동 백업 (Gmail)
+
+무료 Supabase 프로젝트가 정지/삭제될 경우를 대비해, 데이터를 **저장·삭제할 때마다** 전체 DB를
+CSV(테이블별) 묶음 ZIP 으로 Gmail 에 자동 발송합니다.
+
+1. Google 계정 → **보안** → **2단계 인증** 켜기
+2. [앱 비밀번호](https://myaccount.google.com/apppasswords) 에서 새 앱 비밀번호(16자리) 생성
+3. Streamlit Cloud → 앱 **Settings → Secrets** 에 추가:
+
+```toml
+BACKUP_GMAIL_USER         = "you@gmail.com"
+BACKUP_GMAIL_APP_PASSWORD = "abcd efgh ijkl mnop"
+BACKUP_EMAIL_TO           = "you@gmail.com"   # 생략 시 BACKUP_GMAIL_USER 로 발송
+```
+
+- 여러 건을 연달아 저장해도 마지막 변경 약 15초 후 메일 1통만 발송됩니다.
+- 발송은 백그라운드에서 처리되며, 실패해도 데이터 저장에는 영향이 없습니다.
+- **⚙️ 관리** 페이지 하단에서 마지막 발송 결과 확인, 수동 발송, ZIP 직접 다운로드가 가능합니다.
+- 복구 시: 새 Supabase 프로젝트에 `supabase_setup.sql` 실행 → Table Editor 의 **Import data from CSV** 로
+  `pf_accounts` → `pf_securities` → `pf_account_securities` → `pf_snapshots` → `pf_snapshot_items`,
+  `finance_monthly` 순서로 가져오기 (외래키 순서).
+
+---
+
 ## 📁 파일 구조
 
 ```
 finance-dashboard/
 ├── app.py                           # 메인 Streamlit 앱
+├── backup.py                        # DB 전체 CSV 백업 → Gmail 발송
 ├── migrate.py                       # 구글 시트 → Supabase 마이그레이션
 ├── supabase_setup.sql               # DB 테이블 생성 SQL
 ├── requirements.txt                 # Python 패키지

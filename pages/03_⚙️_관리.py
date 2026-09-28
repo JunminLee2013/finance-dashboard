@@ -9,6 +9,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+import backup
 from portfolio import db, prices, ui
 
 
@@ -96,3 +97,43 @@ if securities:
             st.error(f"삭제 실패 (어딘가에 사용 중일 수 있음): {e}")
 
 st.caption("💡 계좌별 종목 선택 / 타겟 비중 설정은 **포트폴리오(계좌별)** 페이지의 '⚙️ 설정' 탭에서 합니다.")
+
+st.divider()
+
+# ── DB 백업 ──────────────────────────────────────────────────────
+st.subheader("DB 백업")
+if backup.is_configured():
+    st.caption(
+        f"데이터를 저장/삭제하면 약 {backup.DEBOUNCE_SEC}초 뒤 전체 DB(CSV 묶음 ZIP)가 메일로 자동 발송됩니다."
+    )
+    status = backup.last_status()
+    if status["pending"]:
+        st.info("⏳ 백업 발송 대기 중...")
+    if status["last_ok"]:
+        st.success(f"마지막 백업 발송: {status['last_ok'].strftime('%Y-%m-%d %H:%M:%S')}")
+    if status["last_error"]:
+        st.error(f"백업 발송 실패 ({status['last_error_at'].strftime('%Y-%m-%d %H:%M:%S')}): {status['last_error']}")
+    if st.button("📧 지금 메일로 백업 보내기"):
+        with st.spinner("백업 발송 중..."):
+            try:
+                backup.send_backup_now()
+                st.success("백업 메일을 보냈습니다.")
+            except Exception as e:
+                st.error(f"발송 실패: {e}")
+else:
+    st.warning(
+        "메일 자동 백업이 설정되지 않았습니다. Streamlit Secrets 에 "
+        "`BACKUP_GMAIL_USER`, `BACKUP_GMAIL_APP_PASSWORD` 를 추가하세요 (README 참고)."
+    )
+
+if st.button("📦 백업 파일 만들기"):
+    with st.spinner("전체 테이블 조회 중..."):
+        try:
+            data, counts = backup.build_backup_zip()
+            st.session_state["pf_backup_zip"] = (backup.backup_filename(), data, counts)
+        except Exception as e:
+            st.error(f"백업 생성 실패: {e}")
+if "pf_backup_zip" in st.session_state:
+    fname, data, counts = st.session_state["pf_backup_zip"]
+    st.caption(" · ".join(f"{t} {n}행" for t, n in counts.items()))
+    st.download_button("📥 ZIP 다운로드", data, fname, "application/zip")

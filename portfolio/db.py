@@ -15,6 +15,8 @@ import httpx
 import streamlit as st
 from supabase import Client, create_client
 
+import backup
+
 
 @st.cache_resource
 def _client() -> Client:
@@ -23,6 +25,7 @@ def _client() -> Client:
 
 def _invalidate():
     st.cache_data.clear()
+    backup.schedule_backup("포트폴리오 데이터 변경")
 
 
 _RETRYABLE_EXC = (httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError)
