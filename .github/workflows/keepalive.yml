@@ -1,0 +1,46 @@
+# Supabase(무료: 7일 무요청 시 일시정지)와 Streamlit Cloud(일정 시간 무방문 시 슬립)의 휴면 방지.
+# 필요한 Secrets: SUPABASE_URL, SUPABASE_KEY  (Settings → Secrets and variables → Actions)
+# ⚠️ public repo라 실행 로그가 공개됨 → 응답 본문은 출력하지 않는다.
+name: keepalive
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # 6시간마다 (UTC)
+  workflow_dispatch:
+
+permissions:
+  actions: write   # 60일 비활성 자동 비활성화 방지용 (아래 마지막 job)
+
+jobs:
+  supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Supabase에 가벼운 조회 요청
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/finance_monthly?select=id&limit=1" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+          echo "Supabase HTTP $code"
+          test "$code" = "200"
+
+  streamlit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install playwright && playwright install --with-deps chromium
+      - run: python scripts/wake_streamlit.py https://financed.streamlit.app
+
+  # public repo는 60일간 활동이 없으면 예약 워크플로가 자동으로 꺼짐 → 스스로 다시 활성화
+  stay-enabled:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable"
